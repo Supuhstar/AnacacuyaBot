@@ -1,0 +1,138 @@
+//
+//  ChatState.swift
+//  AnacacuyaBot
+//
+//  Made by Ky directing Claude 4.7 Opus 2026-05-07
+//
+
+import Foundation
+
+
+
+/// Per-chat memory holding a sliding window of recent messages and the
+/// independent state for two interjection triggers.
+///
+/// The two triggers are deliberately independent:
+///
+/// - **Time-based**: a daily budget of `dailyTimeBasedLimit`
+///   interjections driven by `BotRunner`'s random scheduler. Suited to
+///   keeping the bot present in quiet chats.
+/// - **Message-count**: fires when a randomized number of non-bot
+///   messages accumulate in a chat. Naturally scales with chat activity,
+///   so busy groups receive more interjections without the bot needing
+///   to know anything about them.
+///
+/// Exists as an actor because two concurrent flows touch this state: the
+/// polling loop appends incoming messages while the time-based
+/// interjector reads history and updates counters. Actor isolation
+/// provides mutual exclusion without hand-rolled locks.
+///
+/// Obtain instances via `ChatStateStore.state(for:)` rather than
+/// constructing directly — the store guarantees one instance per chat ID.
+actor ChatState {
+    /// Telegram chat ID this state belongs to. Stored so the interjector
+    /// can route outbound messages without a separate lookup.
+    let chatId: Int64
+
+    /// Sliding window of the most recent messages, oldest first. Capped
+    /// at `maxMessages` to keep prompts within the model's context
+    /// budget.
+    private(set) var recentMessages: [ChatMessage] = []
+
+    /// Number of time-based interjections fired so far in the current
+    /// day. Reset by `rolloverDayIfNeeded()` whenever a new local day
+    /// begins.
+    private var dailyTimeBasedCount = 0
+
+    /// Midnight anchor for the current day. Used to detect day rollover
+    /// without needing a wall-clock timer.
+    private var dayStart: Date
+
+    /// Countdown toward the next message-count interjection. Decremented
+    /// by `add(_:)` for each non-bot message; on reaching zero, the
+    /// trigger fires and the value re-randomizes inside the configured
+    /// range. Crosses day boundaries deliberately — message-count pacing
+    /// is about volume, not time.
+    private var messagesUntilCountTrigger: Int
+
+    /// History window size. Tuned for `smollm2`'s 8K context — keep this
+    /// in sync with the active model if you swap to one with different
+    /// context headroom.
+    private let maxMessages = 15
+
+    /// Hard cap on time-based interjections per chat per day. Does not
+    /// constrain the message-count trigger; the two triggers pace
+    /// themselves independently.
+    private let dailyTimeBasedLimit = 4
+
+    /// Range from which each fresh message-count target is drawn. The
+    /// lower bound prevents the bot from reacting to short bursts of
+    /// activity; the upper keeps it from going silent in slow channels.
+    private static let messageCountTriggerRange: ClosedRange<Int> = 100...400
+
+    init(chatId: Int64) {
+        self.chatId = chatId
+        self.dayStart = Calendar.current.startOfDay(for: .init())
+        self.messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+    }
+
+    /// Records an incoming message and reports whether this addition
+    /// just tripped the message-count trigger.
+    ///
+    /// Returning the event from the mutating call (rather than requiring
+    /// a follow-up check) keeps cause and effect in the same step. Under
+    /// actor isolation this is also the only race-free way to observe
+    /// the trigger: a separate check method would create a window in
+    /// which two arrivals could both see a zero counter and each act on
+    /// it. Bot-authored messages are exempt from the countdown so the
+    /// bot's own activity cannot trigger itself.
+    ///
+    /// `@discardableResult` keeps callers that don't care about the
+    /// trigger (e.g. when persisting the bot's own reply) free of
+    /// ceremony.
+    @discardableResult
+    func add(_ message: ChatMessage) -> Bool {
+        recentMessages.append(message)
+        if recentMessages.count > maxMessages {
+            recentMessages.removeFirst()
+        }
+
+        guard false == message.isBot,
+              messagesUntilCountTrigger > 0
+        else { return false }
+
+        messagesUntilCountTrigger -= 1
+        guard 0 == messagesUntilCountTrigger else { return false }
+
+        messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+        return true
+    }
+
+    /// Reports whether the time-based interjector is currently allowed
+    /// to speak in this chat. Combines the daily budget with a sanity
+    /// check that there is any recent context to riff on.
+    func canInterjectByTime() -> Bool {
+        rolloverDayIfNeeded()
+        return dailyTimeBasedCount < dailyTimeBasedLimit
+            && false == recentMessages.isEmpty
+    }
+
+    /// Call after a successful time-based interjection to deduct from
+    /// the daily budget. Pairs with `canInterjectByTime()` — the caller
+    /// owns the check-then-record sequence.
+    func recordTimeBasedInterjection() {
+        rolloverDayIfNeeded()
+        dailyTimeBasedCount += 1
+    }
+
+    /// Lazily resets the daily counter when the local day has advanced.
+    /// Called from every read or write of the time-based budget, so we
+    /// never need a separate timer firing at midnight.
+    private func rolloverDayIfNeeded() {
+        let today = Calendar.current.startOfDay(for: .init())
+        if today > dayStart {
+            dayStart = today
+            dailyTimeBasedCount = 0
+        }
+    }
+}
