@@ -76,9 +76,14 @@ actor ChatState {
         self.dayStart = Calendar.current.startOfDay(for: .init())
         self.messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
     }
-
-    /// Records an incoming message and reports whether this addition
-    /// just tripped the message-count trigger.
+    
+    
+    var shouldInterjectNow: Bool {
+        0 >= messagesUntilCountTrigger
+    }
+    
+    
+    /// Records an incoming message and reports what to do next.
     ///
     /// Returning the event from the mutating call (rather than requiring
     /// a follow-up check) keeps cause and effect in the same step. Under
@@ -88,27 +93,43 @@ actor ChatState {
     /// it. Bot-authored messages are exempt from the countdown so the
     /// bot's own activity cannot trigger itself.
     ///
-    /// `@discardableResult` keeps callers that don't care about the
-    /// trigger (e.g. when persisting the bot's own reply) free of
-    /// ceremony.
-    @discardableResult
-    func add(_ message: ChatMessage) -> Bool {
+    /// - Parameter message: The recently-received message
+    /// - Returns: What to do next, if anything
+    func register(didReceiveMessage message: ChatMessage) -> NextStep? {
+        register(message)
+        
+        messagesUntilCountTrigger -= 1
+        
+        if shouldInterjectNow {
+            return .interject
+        }
+        else {
+            return .none
+        }
+    }
+    
+    
+    /// Records an outgoing message
+    ///
+    /// - Parameter message: The message that the bot just sent
+    func register(didSendMessage message: ChatMessage) {
+        register(message)
+        
+        if message.isBotInterjection {
+            messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+        }
+    }
+    
+    
+    /// Records that the given message was received or sent
+    private func register(_ message: ChatMessage) {
         recentMessages.append(message)
         if recentMessages.count > maxMessages {
             recentMessages.removeFirst()
         }
-
-        guard false == message.isBot,
-              messagesUntilCountTrigger > 0
-        else { return false }
-
-        messagesUntilCountTrigger -= 1
-        guard 0 == messagesUntilCountTrigger else { return false }
-
-        messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
-        return true
     }
-
+    
+    
     /// Reports whether the time-based interjector is currently allowed
     /// to speak in this chat. Combines the daily budget with a sanity
     /// check that there is any recent context to riff on.
@@ -135,5 +156,14 @@ actor ChatState {
             dayStart = today
             dailyTimeBasedCount = 0
         }
+    }
+    
+    
+    
+    /// What to do next
+    enum NextStep {
+        
+        /// Send an autonomous interjection message
+        case interject
     }
 }

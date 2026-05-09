@@ -63,7 +63,5 @@ actor TelegramClient {
         let body = TGSendMessageBody(chatId: chatId, text: text, replyToMessageId: replyTo, parseMode: .markdown)
         req.httpBody = try body.jsonData(keyEncodingStrategy: keyEncodingStrategy)
         let response = try await URLSession.shared.data(for: req)
-        print((response.1 as? HTTPURLResponse)?.statusCode.description ?? "not HTTP")
-        print(String(data: response.0, encoding: .utf8) ?? "couldn't parse response")
     }
 }

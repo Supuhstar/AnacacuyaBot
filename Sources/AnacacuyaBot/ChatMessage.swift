@@ -20,6 +20,7 @@ import Foundation
 /// request, and also exempts bot-authored messages from the
 /// message-count interjection trigger.
 struct ChatMessage: Sendable {
+    
     /// Display name used to attribute the line when serializing history
     /// for the model. Resolved upstream from username → first name →
     /// fallback, so by the time it lands here it's a non-empty label.
@@ -34,4 +35,16 @@ struct ChatMessage: Sendable {
     /// Drives role assignment when building prompts and exempts bot
     /// messages from the message-count interjection trigger.
     let isBot: Bool
+    
+    /// Whether this was a reply to another message
+    let isReply: Bool
+}
+
+
+
+extension ChatMessage {
+    /// Whether this was a random "autonomous" interjection by the bot
+    var isBotInterjection: Bool {
+        isBot && !isReply
+    }
 }

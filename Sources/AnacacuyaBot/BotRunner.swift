@@ -123,24 +123,24 @@ private extension BotRunner {
     /// The two paths are mutually exclusive within a single message —
     /// a mention plus a count trigger yields one reply, not two
     /// back-to-back outputs.
-    private func handleMessage(_ msg: TGMessage) async throws {
-        guard let text = msg.text, false == text.isEmpty else { return }
+    private func handleMessage(_ userMessage: TGMessage) async throws {
+        guard let text = userMessage.text, false == text.isEmpty else { return }
         
-        let sender = msg.from?.username ?? msg.from?.firstName ?? "someone"
+        let sender = userMessage.from?.username ?? userMessage.from?.firstName ?? "someone"
         
         print(
-            "[\(msg.chat.title ?? msg.chat.username ?? "?")]",
+            "[\(userMessage.chat.title ?? userMessage.chat.username ?? "?")]",
             "\(sender):",
             text
         )
         
-        var state = await store.state(for: msg.chat)
+        var state = await store.state(for: userMessage.chat)
         
         if let command = commands.first(where: { type(of: $0).matches(text) }) {
             for response in try await command.run(with: text, context: .init(persona: persona)) {
                 switch response {
                 case .text(let response):
-                    try await send(message: response, inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
+                    try await send(message: response, inChat: userMessage.chat.id, replyingTo: userMessage.id, chatState: &state)
                 }
             }
             
@@ -150,14 +150,20 @@ private extension BotRunner {
         // Uncomment when you're testing in production:
 //        return try await send(message: "😴💤 [I'm in maintenance mode]", inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
         
-        let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false)
-        let countTriggerFired = await state.add(chatMessage)
+        let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false, isReply: nil != userMessage.replyToMessage)
+        let nextStep = await state.register(didReceiveMessage: chatMessage)
         
-        if isDirectMessage(msg) || isMentioned(msg) || isReplyToBot(msg) {
-            await respond(in: msg.chat, state: &state, replyTo: msg.messageId)
+        if isDirectMessage(userMessage) || isMentioned(userMessage) || isReplyToBot(userMessage) {
+            await respond(in: userMessage.chat, state: &state, replyTo: userMessage.id)
         }
-        else if countTriggerFired {
-            await interject(in: msg.chat, state: &state)
+        else {
+            switch nextStep {
+            case .interject:
+                await interject(in: userMessage.chat, state: &state)
+                
+            case .none:
+                break
+            }
         }
     }
 }
@@ -170,7 +176,12 @@ private extension BotRunner {
     func send(message: String, inChat chatId: TGChat.ID, replyingTo replyTo: TGMessage.ID?, chatState state: inout ChatState) async throws {
         guard false == message.isEmpty else { return }
         try await telegram.sendMessage(chatId: chatId, text: message.telegram_escapedForMarkdownV2, replyTo: replyTo)
-        await state.add(ChatMessage(senderName: botUsername, text: message, isBot: true))
+        await state.register(didSendMessage: ChatMessage(
+            senderName: botUsername,
+            text: message,
+            isBot: true,
+            isReply: nil != replyTo)
+        )
     }
 }
 
