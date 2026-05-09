@@ -6,6 +6,11 @@ import PackageDescription
 let package = Package(
     name: "AnacacuyaBot",
     
+    platforms: [
+        .custom("CachyOS", versionString: "26"),
+        .macOS(.v26),
+    ],
+    
     dependencies: [
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
     ],

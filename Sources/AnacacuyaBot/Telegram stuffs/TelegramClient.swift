@@ -6,13 +6,16 @@
 //
 
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 
 import SerializationTools
 
 
 
 private let keyDecodingStrategy = JSONDecoder.KeyDecodingStrategy.convertFromSnakeCase
+private let keyEncodingStrategy = JSONEncoder.KeyEncodingStrategy.convertToSnakeCase
 
 
 
@@ -28,11 +31,11 @@ actor TelegramClient {
     }
     
     
-    func getMe() async throws -> TGUser {
+    func botUser() async throws -> TGUser {
         let url = URL(string: "\(base)/getMe")!
         let (data, _) = try await URLSession.shared.data(from: url)
         struct R: Decodable { let result: TGUser }
-        return try .init(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
+        return try R(jsonData: data, keyDecodingStrategy: keyDecodingStrategy).result
     }
     
     
@@ -41,7 +44,7 @@ actor TelegramClient {
         comps.queryItems = [
             URLQueryItem(name: "offset", value: "\(offset)"),
             URLQueryItem(name: "timeout", value: "\(timeout)"),
-            URLQueryItem(name: "allowed_updates", value: "[\"message\"]"),
+            URLQueryItem(name: "allowed_updates", value: #"["message"]"#),
         ]
         let (data, _) = try await URLSession.shared.data(from: comps.url!)
         let response = try TGGetUpdatesResponse(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
@@ -58,7 +61,7 @@ actor TelegramClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body = TGSendMessageBody(chatId: chatId, text: text, replyToMessageId: replyTo)
-        req.httpBody = try JSONEncoder().encode(body)
+        req.httpBody = try body.jsonData(keyEncodingStrategy: keyEncodingStrategy)
         _ = try await URLSession.shared.data(for: req)
     }
 }

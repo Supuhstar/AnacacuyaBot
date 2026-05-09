@@ -14,11 +14,6 @@ import Foundation
 struct TGUpdate: Decodable, Sendable {
     let updateId: Int
     let message: TGMessage?
-
-    enum CodingKeys: String, CodingKey {
-        case updateId = "update_id"
-        case message
-    }
 }
 
 struct TGMessage: Decodable, Sendable {
@@ -28,13 +23,6 @@ struct TGMessage: Decodable, Sendable {
     let text: String?
     let replyToMessage: TGRepliedToMessage?
     let entities: [TGMessageEntity]?
-
-    enum CodingKeys: String, CodingKey {
-        case messageId = "message_id"
-        case from, chat, text
-        case replyToMessage = "reply_to_message"
-        case entities
-    }
 }
 
 struct TGRepliedToMessage: Decodable, Sendable {
@@ -43,12 +31,6 @@ struct TGRepliedToMessage: Decodable, Sendable {
     let chat: TGChat
     let text: String?
     let entities: [TGMessageEntity]?
-
-    enum CodingKeys: String, CodingKey {
-        case messageId = "message_id"
-        case from, chat, text
-        case entities
-    }
 }
 
 struct TGUser: Decodable, Sendable {
@@ -56,13 +38,6 @@ struct TGUser: Decodable, Sendable {
     let isBot: Bool
     let firstName: String
     let username: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case isBot = "is_bot"
-        case firstName = "first_name"
-        case username
-    }
 }
 
 struct TGChat: Decodable, Sendable, Identifiable {
@@ -99,10 +74,4 @@ struct TGSendMessageBody: Encodable, Sendable {
     let chatId: Int64
     let text: String
     let replyToMessageId: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case chatId = "chat_id"
-        case text
-        case replyToMessageId = "reply_to_message_id"
-    }
 }

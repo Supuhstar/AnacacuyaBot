@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 
 
 
@@ -35,10 +37,10 @@ actor OllamaClient {
             struct Msg: Decodable { let content: String }
             let message: Msg
         }
-
-        req.httpBody = try JSONEncoder().encode(Body(model: model, messages: messages, stream: false))
+        
+        req.httpBody = try Body(model: model, messages: messages, stream: false).jsonData()
         let (data, _) = try await URLSession.shared.data(for: req)
-        return try JSONDecoder().decode(Response.self, from: data).message.content
+        return try Response(jsonData: data).message.content
     }
 }
 

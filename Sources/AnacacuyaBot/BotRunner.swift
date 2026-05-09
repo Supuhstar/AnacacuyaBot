@@ -50,7 +50,7 @@ struct BotRunner: Sendable {
         let ollamaURL = ProcessInfo.processInfo.environment["OLLAMA_BASE_URL"] ?? "http://localhost:11434"
         
         let telegram = TelegramClient(token: token)
-        let me = try await telegram.getMe()
+        let me = try await telegram.botUser()
         let username = me.username ?? "bot"
         
         print("🤖 Logged in as @\(username) | model: \(model)")
