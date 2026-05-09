@@ -58,8 +58,8 @@ extension BotRunner {
         let model = ProcessInfo.processInfo.environment["OLLAMA_MODEL"] ?? "smollm2"
         let ollamaURL = ProcessInfo.processInfo.environment["OLLAMA_BASE_URL"] ?? "http://localhost:11434"
         
-        let telegram = TelegramClient(token: token)
-        let me = try await telegram.botUser()
+        let telegram = try await TelegramClient(token: token)
+        let me = telegram.botUser
         let username = me.username ?? "bot"
         
         print("🤖 Logged in as @\(username) | model: \(model)")
@@ -86,6 +86,11 @@ extension BotRunner {
             group.addTask { await self.listenForAllMessages() }
             group.addTask { await self.runTimeBasedInterjector() }
         }
+    }
+    
+    
+    var botUser: TGUser {
+        telegram.botUser
     }
 }
 
@@ -127,8 +132,10 @@ private extension BotRunner {
         guard let text = userMessage.text, false == text.isEmpty else { return }
         
         let sender = userMessage.from?.username ?? userMessage.from?.firstName ?? "someone"
+        let shouldRespondToMessage = isDirectMessage(userMessage) || isMentioned(userMessage) || isReplyToBot(userMessage)
         
         print(
+            shouldRespondToMessage ? "👀" : " ",
             "[\(userMessage.chat.title ?? userMessage.chat.username ?? "?")]",
             "\(sender):",
             text
@@ -137,7 +144,13 @@ private extension BotRunner {
         var state = await store.state(for: userMessage.chat)
         
         if let command = commands.first(where: { type(of: $0).matches(text) }) {
-            for response in try await command.run(with: text, context: .init(persona: persona)) {
+            let commandContext = CommandContext(
+                persona: persona,
+                commandMessage: userMessage,
+                botUser: telegram.botUser,
+            )
+            
+            for response in try await command.run(with: text, context: commandContext) {
                 switch response {
                 case .text(let response):
                     try await send(message: response, inChat: userMessage.chat.id, replyingTo: userMessage.id, chatState: &state)
@@ -153,13 +166,13 @@ private extension BotRunner {
         let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false, isReply: nil != userMessage.replyToMessage)
         let nextStep = await state.register(didReceiveMessage: chatMessage)
         
-        if isDirectMessage(userMessage) || isMentioned(userMessage) || isReplyToBot(userMessage) {
-            await respond(in: userMessage.chat, state: &state, replyTo: userMessage.id)
+        if shouldRespondToMessage {
+            await respond(in: userMessage.chat, state: &state, inReplyTo: userMessage.replyToMessage, replyTo: userMessage.id)
         }
         else {
             switch nextStep {
             case .interject:
-                await interject(in: userMessage.chat, state: &state)
+                await interject(in: userMessage.chat, inReplyTo: userMessage.replyToMessage, state: &state)
                 
             case .none:
                 break
@@ -228,9 +241,14 @@ private extension BotRunner {
     /// Generates and sends a direct response, threading the result back
     /// into chat history so the bot's own utterances participate in
     /// future context.
-    private func respond(in chat: TGChat, state: inout ChatState, replyTo: Int? = nil) async {
+    private func respond(
+        in chat: TGChat,
+        state: inout ChatState,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+        replyTo: Int? = nil)
+    async {
         let history = await state.recentMessages
-        let messages = persona.directResponseMessages(in: chat, history: history)
+        let messages = persona.directResponseMessages(in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
         await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
     }
     
@@ -238,10 +256,10 @@ private extension BotRunner {
     /// Generates and sends an unprompted interjection. Distinguished
     /// from `respond` only by which prompt shape it asks the persona
     /// for — the send-and-record machinery is shared via `generate`.
-    private func interject(in chat: TGChat, state: inout ChatState) async {
+    private func interject(in chat: TGChat, inReplyTo repliedToMessage: TGRepliedToMessage?, state: inout ChatState) async {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
-        let messages = persona.interjectionMessages(in: chat, history: history)
+        let messages = persona.interjectionMessages(in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
         await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
         print("💬 Interjected in chat \(chat.id)")
     }
@@ -252,21 +270,30 @@ private extension BotRunner {
     /// logged and swallowed; a model hiccup shouldn't take down the
     /// runner — the next event will give it another chance.
     private func sendGeneratedReply(messages: [OllamaMessage], chatId: Int64, state: inout ChatState, replyTo: Int?) async {
+        let reply: String
+        
         do {
-            let reply = try await ollama.chat(messages: messages)
-            let recentSenders = await state.recentMessages
-                .filter { false == $0.isBot }
-                .map(\.senderName)
-            let cleaned = persona.sanitize(
-                reply,
-                botUsername: botUsername,
-                knownSenders: recentSenders
-            )
-            
-            try await send(message: cleaned, inChat: chatId, replyingTo: replyTo, chatState: &state)
+            reply = try await ollama.chat(messages: messages)
         }
         catch {
             print("⚠️ Generation error: \(error)")
+            return
+        }
+        
+        let recentSenders = await state.recentMessages
+            .filter { false == $0.isBot }
+            .map(\.senderName)
+        let cleaned = persona.sanitize(
+            reply,
+            botUsername: botUsername,
+            knownSenders: recentSenders
+        )
+        
+        do {
+            try await send(message: cleaned, inChat: chatId, replyingTo: replyTo, chatState: &state)
+        }
+        catch {
+            print("⚠️ Failed to send generated reply: \(error)")
         }
     }
     
@@ -301,7 +328,7 @@ private extension BotRunner {
             var state = await store.state(for: randomChat)
             guard await state.stillAllowedToInterjectToday() else { continue }
             
-            await interject(in: randomChat, state: &state)
+            await interject(in: randomChat, inReplyTo: nil, state: &state)
         }
     }
     

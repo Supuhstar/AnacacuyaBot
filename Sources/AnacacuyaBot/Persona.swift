@@ -66,8 +66,8 @@ struct Persona: Sendable {
     /// as multi-turn dialogue. The bot's own previous utterances become
     /// `assistant` turns so the model maintains continuity without being
     /// told to.
-    func directResponseMessages(in chat: TGChat, history: [ChatMessage]) -> [OllamaMessage] {
-        systemPromptMessages(for: .response, in: chat, context: history.formattedToShowToLlm)
+    func directResponseMessages(in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
+        systemPromptMessages(for: .response, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: history.formattedToShowToLlm)
         + history.map(OllamaMessage.init)
     }
     
@@ -77,8 +77,8 @@ struct Persona: Sendable {
     /// than replayed as turns — replaying as turns here causes the model
     /// to produce a continuation of the last speaker rather than fresh
     /// commentary.
-    func interjectionMessages(in chat: TGChat, history: [ChatMessage]) -> [OllamaMessage] {
-        systemPromptMessages(for: .interjection, in: chat, context: history.formattedToShowToLlm)
+    func interjectionMessages(in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
+        systemPromptMessages(for: .interjection, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: history.formattedToShowToLlm)
     }
 }
 
@@ -95,8 +95,14 @@ enum BotMessagePurpose {
 
 extension Persona {
     
-    func systemPromptMessages(for purpose: BotMessagePurpose, in chat: TGChat, context: String) -> [OllamaMessage] {
-        systemPrompt(for: purpose, in: chat, context: context)
+    func systemPromptMessages(
+        for purpose: BotMessagePurpose,
+        botUser: TGUser,
+        in chat: TGChat,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+        context: String)
+    -> [OllamaMessage] {
+        systemPrompt(for: purpose, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: context)
         .map {
             OllamaMessage(
                 role: .system,
@@ -106,14 +112,25 @@ extension Persona {
     }
     
     
-    func systemPrompt(for purpose: BotMessagePurpose, in chat: TGChat, context: String) -> [String] {
-        
+    func systemPrompt(
+        for purpose: BotMessagePurpose,
+        botUser: TGUser,
+        in chat: TGChat,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+        context: String)
+    -> [String] {
         var promptPrefix = switch chat.type {
         case .private:
             "You're sending a DM to \(chat.username ?? "a user")."
             
         case .group, .supergroup:
-            "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+            switch purpose {
+            case .interjection:
+                "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+                
+            case .response:
+                "You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat")."
+            }
             
         case .channel:
             "You're broadcasting a public post in a Telegram channel."
@@ -132,7 +149,7 @@ extension Persona {
                     """
                     \(promptPrefix)
                     
-                    \(inEverySystemPrompt)
+                    \(inEverySystemPrompt(botUser: botUser))
                     Send a short message to the group.
                     """
                 } else {
@@ -143,7 +160,7 @@ extension Persona {
                     
                     \(context)
                     
-                    \(inEverySystemPrompt)
+                    \(inEverySystemPrompt(botUser: botUser))
                     Chime in with one short comment.
                     """
                 }
@@ -160,7 +177,7 @@ extension Persona {
                 """
                 \(promptPrefix)
                 
-                \(inEverySystemPrompt)
+                \(inEverySystemPrompt(botUser: botUser))
                 """,
                 """
                 \(directResponseSystemPrompt)
@@ -174,7 +191,7 @@ extension Persona {
 
 private extension Persona {
     
-    var inEverySystemPrompt: String {
+    func inEverySystemPrompt(botUser: TGUser) -> String {
         var preface = ""
         
         if let name = name {
@@ -190,7 +207,7 @@ private extension Persona {
         }
         
         return """
-            \(preface)Your username is @AnacacuyaBot.
+            \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames").
             Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
             """
     }

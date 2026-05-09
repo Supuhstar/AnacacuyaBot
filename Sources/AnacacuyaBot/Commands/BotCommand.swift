@@ -85,6 +85,8 @@ extension BotCommand {
 /// Meta-info for a bot to best understand what to do when given a command
 public struct CommandContext {
     let persona: Persona
+    let commandMessage: TGMessage
+    let botUser: TGUser
 }
 
 

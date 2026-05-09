@@ -43,12 +43,44 @@ struct TGRepliedToMessage: Decodable, Sendable {
     let entities: [TGMessageEntity]?
 }
 
+
+extension TGRepliedToMessage {
+    init(_ message: TGMessage) {
+        self.init(
+            messageId: message.messageId,
+            from: message.from,
+            chat: message.chat,
+            text: message.text,
+            entities: message.entities)
+    }
+}
+
+
+
 struct TGUser: Decodable, Sendable {
     let id: Int64
     let isBot: Bool
     let firstName: String
     let username: String?
 }
+
+
+
+extension TGUser {
+    var nameForLlm: String {
+        if let username {
+            "\(firstName) (\(username))"
+        }
+        else if firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            "an anonymous user"
+        }
+        else {
+            firstName
+        }
+    }
+}
+
+
 
 struct TGChat: Decodable, Sendable, Identifiable {
     let id: Int64
@@ -59,6 +91,17 @@ struct TGChat: Decodable, Sendable, Identifiable {
     let firstName: String?
     let lastName: String?
 }
+
+
+
+extension TGChat {
+    var groupNameForLlm: String {
+        title ?? username ?? "a group chat"
+    }
+}
+
+
+
 
 enum TGChatType: String, Decodable, Sendable {
     case `private`

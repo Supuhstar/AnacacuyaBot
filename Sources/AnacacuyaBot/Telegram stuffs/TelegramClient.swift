@@ -23,19 +23,20 @@ actor TelegramClient {
     private let token: String
     private let base: String
     private var offset: Int = 0
+    public let botUser: TGUser
     
     
-    init(token: String) {
+    init(token: String) async throws {
         self.token = token
-        self.base = "https://api.telegram.org/bot\(token)"
-    }
-    
-    
-    func botUser() async throws -> TGUser {
-        let url = URL(string: "\(base)/getMe")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        struct R: Decodable { let result: TGUser }
-        return try R(jsonData: data, keyDecodingStrategy: keyDecodingStrategy).result
+        let base = "https://api.telegram.org/bot\(token)"
+        self.base = base
+        
+        self.botUser = try await {
+            let url = URL(string: "\(base)/getMe")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            struct R: Decodable { let result: TGUser }
+            return try R(jsonData: data, keyDecodingStrategy: keyDecodingStrategy).result
+        }()
     }
     
     

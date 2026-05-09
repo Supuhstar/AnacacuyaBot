@@ -25,7 +25,12 @@ struct PromptCommand: BotCommand {
         
         func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) -> String {
             context.persona
-                .systemPrompt(for: purpose, in: .anyChat(type: chatType), context: exampleContext)
+                .systemPrompt(
+                    for: purpose,
+                    botUser: context.botUser,
+                    in: .anyChat(type: chatType),
+                    inReplyTo: .init(context.commandMessage),
+                    context: exampleContext)
                 .joined(separator: "\n")
         }
         

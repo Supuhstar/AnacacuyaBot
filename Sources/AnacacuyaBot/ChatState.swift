@@ -74,7 +74,6 @@ actor ChatState {
     
     init(chat: TGChat) async {
         self.chat = chat
-        rolloverDayIfNeeded()
         registerInterjection()
     }
 }
