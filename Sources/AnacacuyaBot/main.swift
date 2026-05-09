@@ -14,15 +14,21 @@ import Foundation
 /// want that isolation boundary leaking into every internal call.
 /// `RunLoop.main.run()` then keeps the process alive indefinitely while
 /// the detached task does the work.
-Task.detached {
+//Task.detached {
     do {
         let bot = try await BotRunner.start()
         await bot.run()
     }
     catch {
         print("❌ Fatal: \(error)")
-        exit(.init((error as NSError).code))
+        let code = (error as NSError).code
+        if code == 0 {
+            exit(-1)
+        }
+        else {
+            exit(.init(code))
+        }
     }
-}
+//}
 
-RunLoop.main.run()
+//RunLoop.main.run()
