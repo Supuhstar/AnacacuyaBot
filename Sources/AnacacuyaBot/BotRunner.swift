@@ -30,12 +30,20 @@ struct BotRunner: Sendable {
     let ollama: OllamaClient
     let store: ChatStateStore
     let persona: Persona
+    let commands: [any BotCommand]
     
     /// Bot's own username, resolved at startup via `getMe`. Used for
     /// detecting `@` mentions and identifying replies to the bot's own
     /// messages. Resolved up front so a misconfigured token fails
     /// loudly at startup rather than silently on the first message.
     let botUsername: String
+}
+
+
+
+// MARK: - Basics
+
+extension BotRunner {
     
     /// Bootstraps the runner from environment configuration. Performs
     /// the `getMe` round-trip up front to cache the username and to
@@ -46,6 +54,7 @@ struct BotRunner: Sendable {
         else {
             throw BotError.missingToken
         }
+        
         let model = ProcessInfo.processInfo.environment["OLLAMA_MODEL"] ?? "smollm2"
         let ollamaURL = ProcessInfo.processInfo.environment["OLLAMA_BASE_URL"] ?? "http://localhost:11434"
         
@@ -60,7 +69,10 @@ struct BotRunner: Sendable {
             ollama: OllamaClient(baseURL: ollamaURL, model: model),
             store: ChatStateStore(),
             persona: .default,
-            botUsername: username
+            commands: [
+                PromptCommand(),
+            ],
+            botUsername: username,
         )
     }
     
@@ -71,28 +83,30 @@ struct BotRunner: Sendable {
     /// uniformly and lifecycle is one thing instead of two.
     func run() async {
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.consumeUpdates() }
+            group.addTask { await self.listenForAllMessages() }
             group.addTask { await self.runTimeBasedInterjector() }
         }
     }
-    
-    
-    
-    // MARK: - Update consumption
+}
+
+
+// MARK: - Message handling
+
+private extension BotRunner {
     
     /// Consumes Telegram's long-poll event stream indefinitely. Errors
     /// are absorbed with a brief backoff rather than propagated: the
     /// most common failure modes (transient network blips, brief API
     /// hiccups) shouldn't take the bot down — they should resolve on
     /// the next cycle.
-    private func consumeUpdates() async {
-        print("📡 Listening for updates...")
+    private func listenForAllMessages() async {
+        print("📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
                 let updates = try await telegram.getUpdates(timeout: 30)
                 for update in updates {
                     if let message = update.message {
-                        await handleMessage(message)
+                        try await handleMessage(message)
                     }
                 }
             } catch {
@@ -109,33 +123,62 @@ struct BotRunner: Sendable {
     /// The two paths are mutually exclusive within a single message —
     /// a mention plus a count trigger yields one reply, not two
     /// back-to-back outputs.
-    private func handleMessage(_ msg: TGMessage) async {
+    private func handleMessage(_ msg: TGMessage) async throws {
         guard let text = msg.text, false == text.isEmpty else { return }
         
         let sender = msg.from?.username ?? msg.from?.firstName ?? "someone"
         
         print(
-            "\(msg.chat.title ?? "?"):",
+            "[\(msg.chat.title ?? msg.chat.username ?? "?")]",
             "\(sender):",
             text
         )
         
-        let state = await store.state(for: msg.chat)
+        var state = await store.state(for: msg.chat)
+        
+        if let command = commands.first(where: { type(of: $0).matches(text) }) {
+            for response in try await command.run(with: text, context: .init(persona: persona)) {
+                switch response {
+                case .text(let response):
+                    try await send(message: response, inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
+                }
+            }
+            
+            return
+        }
+        
+        // Uncomment when you're testing in production:
+//        return try await send(message: "😴💤 [I'm in maintenance mode]", inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
+        
         let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false)
         let countTriggerFired = await state.add(chatMessage)
         
         if isDirectMessage(msg) || isMentioned(msg) || isReplyToBot(msg) {
-            await respond(in: msg.chat, state: state, replyTo: msg.messageId)
+            await respond(in: msg.chat, state: &state, replyTo: msg.messageId)
         }
         else if countTriggerFired {
-            await interject(in: msg.chat, state: state)
+            await interject(in: msg.chat, state: &state)
         }
     }
-    
-    
-    
-    // MARK: - Mention detection
-    
+}
+
+
+
+// MARK: - Sending messages
+
+private extension BotRunner {
+    func send(message: String, inChat chatId: TGChat.ID, replyingTo replyTo: TGMessage.ID?, chatState state: inout ChatState) async throws {
+        guard false == message.isEmpty else { return }
+        try await telegram.sendMessage(chatId: chatId, text: message.telegram_escapedForMarkdownV2, replyTo: replyTo)
+        await state.add(ChatMessage(senderName: botUsername, text: message, isBot: true))
+    }
+}
+
+
+
+// MARK: - Mention detection
+
+private extension BotRunner {
     private func isDirectMessage(_ msg: TGMessage) -> Bool {
         .private == msg.chat.type
     }
@@ -174,21 +217,21 @@ struct BotRunner: Sendable {
     /// Generates and sends a direct response, threading the result back
     /// into chat history so the bot's own utterances participate in
     /// future context.
-    private func respond(in chat: TGChat, state: ChatState, replyTo: Int? = nil) async {
+    private func respond(in chat: TGChat, state: inout ChatState, replyTo: Int? = nil) async {
         let history = await state.recentMessages
         let messages = persona.directResponseMessages(in: chat, history: history)
-        await generate(messages: messages, chatId: chat.id, state: state, replyTo: replyTo)
+        await sendGeneratedReplies(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
     }
     
     
     /// Generates and sends an unprompted interjection. Distinguished
     /// from `respond` only by which prompt shape it asks the persona
     /// for — the send-and-record machinery is shared via `generate`.
-    private func interject(in chat: TGChat, state: ChatState) async {
+    private func interject(in chat: TGChat, state: inout ChatState) async {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
         let messages = persona.interjectionMessages(in: chat, history: history)
-        await generate(messages: messages, chatId: chat.id, state: state, replyTo: nil)
+        await sendGeneratedReplies(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
         print("💬 Interjected in chat \(chat.id)")
     }
     
@@ -197,7 +240,7 @@ struct BotRunner: Sendable {
     /// the bot's own message in chat history. Generation failures are
     /// logged and swallowed; a model hiccup shouldn't take down the
     /// runner — the next event will give it another chance.
-    private func generate(messages: [OllamaMessage], chatId: Int64, state: ChatState, replyTo: Int?) async {
+    private func sendGeneratedReplies(messages: [OllamaMessage], chatId: Int64, state: inout ChatState, replyTo: Int?) async {
         do {
             let reply = try await ollama.chat(messages: messages)
             let recentSenders = await state.recentMessages
@@ -208,10 +251,10 @@ struct BotRunner: Sendable {
                 botUsername: botUsername,
                 knownSenders: recentSenders
             )
-            guard false == cleaned.isEmpty else { return }
-            try await telegram.sendMessage(chatId: chatId, text: cleaned, replyTo: replyTo)
-            await state.add(ChatMessage(senderName: botUsername, text: cleaned, isBot: true))
-        } catch {
+            
+            try await send(message: cleaned, inChat: chatId, replyingTo: replyTo, chatState: &state)
+        }
+        catch {
             print("⚠️ Generation error: \(error)")
         }
     }
@@ -243,11 +286,11 @@ struct BotRunner: Sendable {
             let chats = await store.allChats()
             guard let chat = chats.randomElement() else { continue }
 
-            let state = await store.state(for: chat)
+            var state = await store.state(for: chat)
             guard await state.canInterjectByTime() else { continue }
 
             await state.recordTimeBasedInterjection()
-            await interject(in: chat, state: state)
+            await interject(in: chat, state: &state)
         }
     }
     

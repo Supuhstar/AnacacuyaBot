@@ -16,14 +16,24 @@ struct TGUpdate: Decodable, Sendable {
     let message: TGMessage?
 }
 
+
+
 struct TGMessage: Decodable, Sendable {
-    let messageId: Int
+    let messageId: ID
     let from: TGUser?
     let chat: TGChat
     let text: String?
     let replyToMessage: TGRepliedToMessage?
     let entities: [TGMessageEntity]?
 }
+
+
+
+extension TGMessage: Identifiable {
+    var id: Int { messageId }
+}
+
+
 
 struct TGRepliedToMessage: Decodable, Sendable {
     let messageId: Int
@@ -74,4 +84,13 @@ struct TGSendMessageBody: Encodable, Sendable {
     let chatId: Int64
     let text: String
     let replyToMessageId: Int?
+    
+    let parseMode: TGSendMessageParseMode?
+}
+
+
+
+
+enum TGSendMessageParseMode: String, Encodable, Sendable {
+    case markdown = "MarkdownV2"
 }

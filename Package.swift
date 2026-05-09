@@ -23,12 +23,17 @@ let package = Package(
             dependencies: [
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
             ],
+            swiftSettings: [
+                .unsafeFlags([
+                    "-enable-bare-slash-regex",
+                ])
+            ],
         ),
         .testTarget(
             name: "AnacacuyaBotTests",
             dependencies: ["AnacacuyaBot"],
         ),
     ],
-
+    
     swiftLanguageModes: [.v6],
 )

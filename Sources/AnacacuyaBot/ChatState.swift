@@ -63,7 +63,7 @@ actor ChatState {
     /// Hard cap on time-based interjections per chat per day. Does not
     /// constrain the message-count trigger; the two triggers pace
     /// themselves independently.
-    private let dailyTimeBasedLimit = Limits.maxAutonomousMessagesPerday
+    private let dailyTimeBasedLimit = Limits.maxAutonomousMessagesPerDay
 
     /// Range from which each fresh message-count target is drawn. The
     /// lower bound prevents the bot from reacting to short bursts of

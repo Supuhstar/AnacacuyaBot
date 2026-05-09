@@ -15,7 +15,7 @@ extension Limits {
     
     // MARK: Autonomous interactions
     
-    static let maxAutonomousMessagesPerday = 4
+    static let maxAutonomousMessagesPerDay = 4
     
     static let minMessagesBeforeAutonomousMessageAllowed = 100
     static let maxMessagesBeforeAutonomousMessageGuaranteed = 400

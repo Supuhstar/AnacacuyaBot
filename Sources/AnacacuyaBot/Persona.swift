@@ -9,19 +9,15 @@ import Foundation
 
 
 
-let inEverySystemPrompt = """
-Your name is Luna Nightshade (they/them).
-Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER a prefix, NEVER boilerplate.
-"""
-
-
-
 extension Persona {
     
     /// The default persona of the bot
     static let `default` = Persona(
+        name: "Luna Nightshade",
+        pronouns: "they/them",
+        
         directResponseSystemPrompt: """
-            You are a member of a casual group chat. Keep replies to 1~3 sentences.
+            Keep replies to 1~3 sentences.
             These people are your friends, and you genuinely treat them that way.
             Say whatever you want!
             """,
@@ -52,6 +48,9 @@ extension Persona {
 /// because replaying as turns invites the model to continue the last
 /// speaker rather than comment.
 struct Persona: Sendable {
+    
+    var name: String? = nil
+    var pronouns: String? = nil
     
     /// System prompt for direct responses. Sets the voice for replies
     /// that participate in turn-taking dialogue.
@@ -109,22 +108,21 @@ extension Persona {
     
     func systemPrompt(for purpose: BotMessagePurpose, in chat: TGChat, context: String) -> [String] {
         
-        let promptPrefix: String
-        if let currentChatTitle = chat.title {
-            promptPrefix = "Current chat: \(currentChatTitle)"
+        var promptPrefix = switch chat.type {
+        case .private:
+            "You're sending a DM to \(chat.username ?? "a user")."
+            
+        case .group, .supergroup:
+            "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+            
+        case .channel:
+            "You're broadcasting a public post in a Telegram channel."
         }
-        else {
-            switch chat.type {
-            case .private:
-                promptPrefix = "You're sending a DM to \(chat.username ?? "a user")."
-                
-            case .group, .supergroup:
-                promptPrefix = "You're talking in \(chat.username ?? "a group chat")."
-                
-            case .channel:
-                promptPrefix = "You're broadcasting a public post in a Telegram channel."
-            }
-        }
+        
+        promptPrefix += """
+            
+            Current time: \(Date.now)
+            """
         
         
         
@@ -134,8 +132,8 @@ extension Persona {
                     """
                     \(promptPrefix)
                     
-                    Send a short message to the group.
                     \(inEverySystemPrompt)
+                    Send a short message to the group.
                     """
                 } else {
                     """
@@ -145,15 +143,14 @@ extension Persona {
                     
                     \(context)
                     
-                    Chime in with one short comment.
                     \(inEverySystemPrompt)
+                    Chime in with one short comment.
                     """
                 }
             
             return [
                 generalPrompt,
                 """
-                Current time: \(Date.now)
                 \(interjectionSystemPrompt)
                 """,
             ]
@@ -166,11 +163,36 @@ extension Persona {
                 \(inEverySystemPrompt)
                 """,
                 """
-                Current time: \(Date.now)
                 \(directResponseSystemPrompt)
                 """
             ]
         }
+    }
+}
+
+
+
+private extension Persona {
+    
+    var inEverySystemPrompt: String {
+        var preface = ""
+        
+        if let name = name {
+            if let pronouns {
+                preface += "Your name is \(name) (\(pronouns)). "
+            }
+            else {
+                preface += "Your name is \(name). "
+            }
+        }
+        else if let pronouns = pronouns {
+            preface += "Your pronouns are \(pronouns). "
+        }
+        
+        return """
+            \(preface)Your username is @AnacacuyaBot.
+            Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
+            """
     }
 }
 
