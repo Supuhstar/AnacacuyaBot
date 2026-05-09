@@ -57,6 +57,7 @@ actor TelegramClient {
     
     
     func sendMessage(chatId: Int64, text: String, replyTo: Int? = nil) async throws {
+        print("🗣️\(nil == replyTo ? "🤖" : "👩🏽‍💻"):", text)
         let url = URL(string: "\(base)/sendMessage")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
