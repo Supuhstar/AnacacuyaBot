@@ -34,7 +34,4 @@ struct ChatMessage: Sendable {
     /// Drives role assignment when building prompts and exempts bot
     /// messages from the message-count interjection trigger.
     let isBot: Bool
-    
-    /// The name of the chat in which the message was sent.
-    let chatName: String
 }

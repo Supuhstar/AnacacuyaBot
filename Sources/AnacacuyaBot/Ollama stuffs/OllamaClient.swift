@@ -45,6 +45,16 @@ actor OllamaClient {
 
 
 struct OllamaMessage: Codable, Sendable {
-    let role: String
+    let role: Role
     let content: String
+}
+
+
+
+extension OllamaMessage {
+    enum Role: String, Codable, Sendable {
+        case system
+        case assistant
+        case user
+    }
 }

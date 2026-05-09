@@ -32,7 +32,7 @@ import Foundation
 actor ChatState {
     /// Telegram chat ID this state belongs to. Stored so the interjector
     /// can route outbound messages without a separate lookup.
-    let chatId: Int64
+    let chat: TGChat
 
     /// Sliding window of the most recent messages, oldest first. Capped
     /// at `maxMessages` to keep prompts within the model's context
@@ -58,20 +58,21 @@ actor ChatState {
     /// History window size. Tuned for `smollm2`'s 8K context — keep this
     /// in sync with the active model if you swap to one with different
     /// context headroom.
-    private let maxMessages = 15
+    private let maxMessages = Limits.contextWindow_messageCount
 
     /// Hard cap on time-based interjections per chat per day. Does not
     /// constrain the message-count trigger; the two triggers pace
     /// themselves independently.
-    private let dailyTimeBasedLimit = 4
+    private let dailyTimeBasedLimit = Limits.maxAutonomousMessagesPerday
 
     /// Range from which each fresh message-count target is drawn. The
     /// lower bound prevents the bot from reacting to short bursts of
     /// activity; the upper keeps it from going silent in slow channels.
-    private static let messageCountTriggerRange: ClosedRange<Int> = 100...400
+    private static let messageCountTriggerRange 
+        = Limits.minMessagesBeforeAutonomousMessageAllowed ... Limits.maxMessagesBeforeAutonomousMessageGuaranteed
 
-    init(chatId: Int64) {
-        self.chatId = chatId
+    init(chat: TGChat) {
+        self.chat = chat
         self.dayStart = Calendar.current.startOfDay(for: .init())
         self.messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
     }

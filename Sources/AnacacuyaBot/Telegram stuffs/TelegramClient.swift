@@ -8,6 +8,12 @@
 import Foundation
 import FoundationNetworking
 
+import SerializationTools
+
+
+
+private let keyDecodingStrategy = JSONDecoder.KeyDecodingStrategy.convertFromSnakeCase
+
 
 
 actor TelegramClient {
@@ -26,7 +32,7 @@ actor TelegramClient {
         let url = URL(string: "\(base)/getMe")!
         let (data, _) = try await URLSession.shared.data(from: url)
         struct R: Decodable { let result: TGUser }
-        return try JSONDecoder().decode(R.self, from: data).result
+        return try .init(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
     }
     
     
@@ -38,7 +44,7 @@ actor TelegramClient {
             URLQueryItem(name: "allowed_updates", value: "[\"message\"]"),
         ]
         let (data, _) = try await URLSession.shared.data(from: comps.url!)
-        let response = try JSONDecoder().decode(TGGetUpdatesResponse.self, from: data)
+        let response = try TGGetUpdatesResponse(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
         if let last = response.result.last {
             offset = last.updateId + 1
         }

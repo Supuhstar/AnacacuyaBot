@@ -65,10 +65,21 @@ struct TGUser: Decodable, Sendable {
     }
 }
 
-struct TGChat: Decodable, Sendable {
+struct TGChat: Decodable, Sendable, Identifiable {
     let id: Int64
-    let type: String
+    let type: TGChatType
     let title: String?
+    
+    let username: String?
+    let firstName: String?
+    let lastName: String?
+}
+
+enum TGChatType: String, Decodable, Sendable {
+    case `private`
+    case group
+    case supergroup
+    case channel
 }
 
 struct TGMessageEntity: Decodable, Sendable {

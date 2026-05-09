@@ -112,19 +112,23 @@ struct BotRunner: Sendable {
     private func handleMessage(_ msg: TGMessage) async {
         guard let text = msg.text, false == text.isEmpty else { return }
         
-        print("Reading message:", text)
-        
         let sender = msg.from?.username ?? msg.from?.firstName ?? "someone"
-
-        let state = await store.state(for: msg.chat.id)
+        
+        print(
+            "\(msg.chat.title ?? "?"):",
+            "\(sender):",
+            text
+        )
+        
+        let state = await store.state(for: msg.chat)
         let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false)
         let countTriggerFired = await state.add(chatMessage)
         
         if isDirectMessage(msg) || isMentioned(msg) || isReplyToBot(msg) {
-            await respond(chatId: msg.chat.id, state: state, replyTo: msg.messageId)
+            await respond(in: msg.chat, state: state, replyTo: msg.messageId)
         }
         else if countTriggerFired {
-            await interject(chatId: msg.chat.id, state: state)
+            await interject(in: msg.chat, state: state)
         }
     }
     
@@ -133,7 +137,7 @@ struct BotRunner: Sendable {
     // MARK: - Mention detection
     
     private func isDirectMessage(_ msg: TGMessage) -> Bool {
-        "private" == msg.chat.type
+        .private == msg.chat.type
     }
     
     /// Reports whether a message addresses the bot directly. Both the
@@ -170,22 +174,22 @@ struct BotRunner: Sendable {
     /// Generates and sends a direct response, threading the result back
     /// into chat history so the bot's own utterances participate in
     /// future context.
-    private func respond(chatId: Int64, state: ChatState, replyTo: Int? = nil) async {
+    private func respond(in chat: TGChat, state: ChatState, replyTo: Int? = nil) async {
         let history = await state.recentMessages
-        let messages = persona.directResponseMessages(history: history)
-        await generate(messages: messages, chatId: chatId, state: state, replyTo: replyTo)
+        let messages = persona.directResponseMessages(in: chat, history: history)
+        await generate(messages: messages, chatId: chat.id, state: state, replyTo: replyTo)
     }
     
     
     /// Generates and sends an unprompted interjection. Distinguished
     /// from `respond` only by which prompt shape it asks the persona
     /// for — the send-and-record machinery is shared via `generate`.
-    private func interject(chatId: Int64, state: ChatState) async {
+    private func interject(in chat: TGChat, state: ChatState) async {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
-        let messages = persona.interjectionMessages(history: history)
-        await generate(messages: messages, chatId: chatId, state: state, replyTo: nil)
-        print("💬 Interjected in chat \(chatId)")
+        let messages = persona.interjectionMessages(in: chat, history: history)
+        await generate(messages: messages, chatId: chat.id, state: state, replyTo: nil)
+        print("💬 Interjected in chat \(chat.id)")
     }
     
     
@@ -236,14 +240,14 @@ struct BotRunner: Sendable {
                 return
             }
 
-            let chatIds = await store.allChatIds()
-            guard let chatId = chatIds.randomElement() else { continue }
+            let chats = await store.allChats()
+            guard let chat = chats.randomElement() else { continue }
 
-            let state = await store.state(for: chatId)
+            let state = await store.state(for: chat)
             guard await state.canInterjectByTime() else { continue }
 
             await state.recordTimeBasedInterjection()
-            await interject(chatId: chatId, state: state)
+            await interject(in: chat, state: state)
         }
     }
     

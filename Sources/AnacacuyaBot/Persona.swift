@@ -24,6 +24,7 @@ extension Persona {
             These people are your friends, and you genuinely treat them that way.
             Say whatever you want!
             """,
+        
         interjectionSystemPrompt: """
             You're a member of a casual group chat. No one is talking to you right now.
             Say whatever you want!
@@ -65,16 +66,8 @@ struct Persona: Sendable {
     /// as multi-turn dialogue. The bot's own previous utterances become
     /// `assistant` turns so the model maintains continuity without being
     /// told to.
-    func directResponseMessages(history: [ChatMessage]) -> [OllamaMessage] {
-        [
-            OllamaMessage(
-                role: "system",
-                content: """
-                    Current time: \(Date.now)
-                    \(directResponseSystemPrompt)
-                    """
-            )
-        ]
+    func directResponseMessages(in chat: TGChat, history: [ChatMessage]) -> [OllamaMessage] {
+        systemPromptMessages(for: .response, in: chat, context: history.formattedToShowToLlm)
         + history.map(OllamaMessage.init)
     }
     
@@ -84,69 +77,105 @@ struct Persona: Sendable {
     /// than replayed as turns — replaying as turns here causes the model
     /// to produce a continuation of the last speaker rather than fresh
     /// commentary.
-    func interjectionMessages(history: [ChatMessage]) -> [OllamaMessage] {
-        let context = history.formattedToShowToLlm
-        let prompt = if context.isEmpty {
-            """
-            Send a short message to the group.
-            """
-        } else {
-            """
-            Recent group messages:
-            
-            \(context)
-            
-            Chime in with one short comment.
-            """
+    func interjectionMessages(in chat: TGChat, history: [ChatMessage]) -> [OllamaMessage] {
+        systemPromptMessages(for: .interjection, in: chat, context: history.formattedToShowToLlm)
+    }
+}
+
+
+
+enum BotMessagePurpose {
+    case interjection
+    case response
+}
+
+
+
+// MARK: - Prompt building
+
+extension Persona {
+    
+    func systemPromptMessages(for purpose: BotMessagePurpose, in chat: TGChat, context: String) -> [OllamaMessage] {
+        systemPrompt(for: purpose, in: chat, context: context)
+        .map {
+            OllamaMessage(
+                role: .system,
+                content: $0
+            )
+        }
+    }
+    
+    
+    func systemPrompt(for purpose: BotMessagePurpose, in chat: TGChat, context: String) -> [String] {
+        
+        let promptPrefix: String
+        if let currentChatTitle = chat.title {
+            promptPrefix = "Current chat: \(currentChatTitle)"
+        }
+        else {
+            switch chat.type {
+            case .private:
+                promptPrefix = "You're sending a DM to \(chat.username ?? "a user")."
+                
+            case .group, .supergroup:
+                promptPrefix = "You're talking in \(chat.username ?? "a group chat")."
+                
+            case .channel:
+                promptPrefix = "You're broadcasting a public post in a Telegram channel."
+            }
         }
         
-        return [
-            .init(
-                role: "system",
-                content: """
-                    Current time: \(Date.now)
-                    \(interjectionSystemPrompt)
+        
+        
+        switch purpose {
+        case .interjection:
+            let generalPrompt = if context.isEmpty {
                     """
-            ),
+                    \(promptPrefix)
+                    
+                    Send a short message to the group.
+                    \(inEverySystemPrompt)
+                    """
+                } else {
+                    """
+                    \(promptPrefix)
+                    
+                    Recent group messages:
+                    
+                    \(context)
+                    
+                    Chime in with one short comment.
+                    \(inEverySystemPrompt)
+                    """
+                }
             
-            .init(role: "system", content: prompt),
-        ]
-    }
-}
-
-
-
-extension ChatMessage {
-    var formattedToShowToLlm: String {
-        "\(senderName): \(text)"
-    }
-}
-
-
-
-extension [ChatMessage] {
-    var formattedToShowToLlm: String {
-        map(\.formattedToShowToLlm)
-        .joined(separator: "\n\n")
-    }
-}
-
-
-
-extension OllamaMessage {
-    init(_ telegramMessage: ChatMessage) {
-        let role = telegramMessage.isBot
-            ? "assistant"
-            : "user"
-        let content = telegramMessage.isBot
-            ? telegramMessage.text
-            : "\(telegramMessage.senderName): \(telegramMessage.text)"
+            return [
+                generalPrompt,
+                """
+                Current time: \(Date.now)
+                \(interjectionSystemPrompt)
+                """,
+            ]
             
-        self.init(role: role, content: content)
+        case .response:
+            return [
+                """
+                \(promptPrefix)
+                
+                \(inEverySystemPrompt)
+                """,
+                """
+                Current time: \(Date.now)
+                \(directResponseSystemPrompt)
+                """
+            ]
+        }
     }
 }
 
 
+
+// MARK: - Sanitization
 
 extension Persona {
     /// Strips formatting artifacts the model picks up from the
@@ -200,5 +229,39 @@ extension Persona {
             withTemplate: ""
         )
         return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+
+
+// MARK: - Conveniences
+
+extension ChatMessage {
+    var formattedToShowToLlm: String {
+        "\(senderName): \(text)"
+    }
+}
+
+
+
+extension [ChatMessage] {
+    var formattedToShowToLlm: String {
+        map(\.formattedToShowToLlm)
+        .joined(separator: "\n\n")
+    }
+}
+
+
+
+extension OllamaMessage {
+    init(_ telegramMessage: ChatMessage) {
+        let role: OllamaMessage.Role = telegramMessage.isBot
+            ? .assistant
+            : .user
+        let content = telegramMessage.isBot
+            ? telegramMessage.text
+            : "\(telegramMessage.senderName): \(telegramMessage.text)"
+            
+        self.init(role: role, content: content)
     }
 }
