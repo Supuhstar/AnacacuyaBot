@@ -17,8 +17,8 @@ extension Limits {
     
     static let maxAutonomousMessagesPerDay = 4
     
-    static let minMessagesBeforeAutonomousMessageAllowed = 100
-    static let maxMessagesBeforeAutonomousMessageGuaranteed = 400
+    static let minMessagesBeforeAutonomousMessageAllowed = 25
+    static let maxMessagesBeforeAutonomousMessageGuaranteed = 200
 }
 
 
