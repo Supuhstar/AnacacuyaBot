@@ -20,9 +20,9 @@ actor ChatStateStore {
     /// contact. Lazy creation means no explicit registration is needed
     /// when the bot joins a new group — the first message from that
     /// group implicitly initializes its state.
-    func state(for chat: TGChat) -> ChatState {
+    func state(for chat: TGChat) async -> ChatState {
         if let existing = states[chat.id] { return existing }
-        let fresh = ChatState(chat: chat)
+        let fresh = await ChatState(chat: chat)
         states[chat.id] = fresh
         return fresh
     }

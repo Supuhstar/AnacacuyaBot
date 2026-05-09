@@ -231,7 +231,7 @@ private extension BotRunner {
     private func respond(in chat: TGChat, state: inout ChatState, replyTo: Int? = nil) async {
         let history = await state.recentMessages
         let messages = persona.directResponseMessages(in: chat, history: history)
-        await sendGeneratedReplies(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
+        await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
     }
     
     
@@ -242,7 +242,7 @@ private extension BotRunner {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
         let messages = persona.interjectionMessages(in: chat, history: history)
-        await sendGeneratedReplies(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
+        await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
         print("💬 Interjected in chat \(chat.id)")
     }
     
@@ -251,7 +251,7 @@ private extension BotRunner {
     /// the bot's own message in chat history. Generation failures are
     /// logged and swallowed; a model hiccup shouldn't take down the
     /// runner — the next event will give it another chance.
-    private func sendGeneratedReplies(messages: [OllamaMessage], chatId: Int64, state: inout ChatState, replyTo: Int?) async {
+    private func sendGeneratedReply(messages: [OllamaMessage], chatId: Int64, state: inout ChatState, replyTo: Int?) async {
         do {
             let reply = try await ollama.chat(messages: messages)
             let recentSenders = await state.recentMessages
@@ -284,24 +284,24 @@ private extension BotRunner {
     /// The initial delay prevents a startup-time burst before any chats
     /// are known to the store.
     private func runTimeBasedInterjector() async {
-        try? await Task.sleep(for: .seconds(Int.random(in: 1800...7200)))
-
+        // Only think about interjecting after 0.5~2 hours have passed
+        try? await Task.sleep(for: .hours(.random(in: 0.5 ... 2)))
+        
         while false == Task.isCancelled {
-            let delay = Int.random(in: 4 * 3600 ... 20 * 3600)
             do {
-                try await Task.sleep(for: .seconds(delay))
-            } catch {
+                // Only think about interjecting every 4~20 hours
+                try await Task.sleep(for: .hours(.random(in: 4 ... 20)))
+            }
+            catch {
                 return
             }
-
-            let chats = await store.allChats()
-            guard let chat = chats.randomElement() else { continue }
-
-            var state = await store.state(for: chat)
-            guard await state.canInterjectByTime() else { continue }
-
-            await state.recordTimeBasedInterjection()
-            await interject(in: chat, state: &state)
+            
+            guard let randomChat = await store.allChats().randomElement() else { continue }
+            
+            var state = await store.state(for: randomChat)
+            guard await state.stillAllowedToInterjectToday() else { continue }
+            
+            await interject(in: randomChat, state: &state)
         }
     }
     

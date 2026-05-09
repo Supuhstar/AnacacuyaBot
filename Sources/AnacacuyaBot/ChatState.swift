@@ -42,45 +42,48 @@ actor ChatState {
     /// Number of time-based interjections fired so far in the current
     /// day. Reset by `rolloverDayIfNeeded()` whenever a new local day
     /// begins.
-    private var dailyTimeBasedCount = 0
+    private var interjectionCount = -1
 
     /// Midnight anchor for the current day. Used to detect day rollover
     /// without needing a wall-clock timer.
-    private var dayStart: Date
+    private var dayStart: Date = .distantPast
 
     /// Countdown toward the next message-count interjection. Decremented
     /// by `add(_:)` for each non-bot message; on reaching zero, the
     /// trigger fires and the value re-randomizes inside the configured
     /// range. Crosses day boundaries deliberately — message-count pacing
     /// is about volume, not time.
-    private var messagesUntilCountTrigger: Int
+    private var messagesUntilCountTrigger: Int = 0
 
     /// History window size. Tuned for `smollm2`'s 8K context — keep this
     /// in sync with the active model if you swap to one with different
     /// context headroom.
-    private let maxMessages = Limits.contextWindow_messageCount
+    private let maxMessagesInHistory = Limits.contextWindow_messageCount
 
     /// Hard cap on time-based interjections per chat per day. Does not
     /// constrain the message-count trigger; the two triggers pace
     /// themselves independently.
-    private let dailyTimeBasedLimit = Limits.maxAutonomousMessagesPerDay
+    private let maxDailyInterjections = Limits.maxAutonomousMessagesPerDay
 
     /// Range from which each fresh message-count target is drawn. The
     /// lower bound prevents the bot from reacting to short bursts of
     /// activity; the upper keeps it from going silent in slow channels.
     private static let messageCountTriggerRange 
         = Limits.minMessagesBeforeAutonomousMessageAllowed ... Limits.maxMessagesBeforeAutonomousMessageGuaranteed
-
-    init(chat: TGChat) {
+    
+    
+    init(chat: TGChat) async {
         self.chat = chat
-        self.dayStart = Calendar.current.startOfDay(for: .init())
-        self.messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+        rolloverDayIfNeeded()
+        registerInterjection()
     }
-    
-    
-    var shouldInterjectNow: Bool {
-        0 >= messagesUntilCountTrigger
-    }
+}
+
+
+
+// MARK: - Message registration
+
+extension ChatState {
     
     
     /// Records an incoming message and reports what to do next.
@@ -116,7 +119,7 @@ actor ChatState {
         register(message)
         
         if message.isBotInterjection {
-            messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+            registerInterjection()
         }
     }
     
@@ -124,8 +127,33 @@ actor ChatState {
     /// Records that the given message was received or sent
     private func register(_ message: ChatMessage) {
         recentMessages.append(message)
-        if recentMessages.count > maxMessages {
+        if recentMessages.count > maxMessagesInHistory {
             recentMessages.removeFirst()
+        }
+    }
+}
+
+
+
+// MARK: - Interjection
+
+extension ChatState {
+    
+    var shouldInterjectNow: Bool {
+        0 >= messagesUntilCountTrigger
+        || interjectionCount >= maxDailyInterjections
+    }
+    
+    
+    func registerInterjection() {
+        interjectionCount += 1
+        messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+        
+        if stillAllowedToInterjectToday() {
+            print(chat.nameForLog, "•", "Interjection \(interjectionCount)/\(maxDailyInterjections). Next interjection in \(messagesUntilCountTrigger) messages")
+        }
+        else {
+            print(chat.nameForLog, "•", "No more interjections today")
         }
     }
     
@@ -133,37 +161,51 @@ actor ChatState {
     /// Reports whether the time-based interjector is currently allowed
     /// to speak in this chat. Combines the daily budget with a sanity
     /// check that there is any recent context to riff on.
-    func canInterjectByTime() -> Bool {
+    func stillAllowedToInterjectToday() -> Bool {
         rolloverDayIfNeeded()
-        return dailyTimeBasedCount < dailyTimeBasedLimit
-            && false == recentMessages.isEmpty
-    }
-
-    /// Call after a successful time-based interjection to deduct from
-    /// the daily budget. Pairs with `canInterjectByTime()` — the caller
-    /// owns the check-then-record sequence.
-    func recordTimeBasedInterjection() {
-        rolloverDayIfNeeded()
-        dailyTimeBasedCount += 1
+        return interjectionCount < maxDailyInterjections
     }
 
     /// Lazily resets the daily counter when the local day has advanced.
     /// Called from every read or write of the time-based budget, so we
     /// never need a separate timer firing at midnight.
     private func rolloverDayIfNeeded() {
-        let today = Calendar.current.startOfDay(for: .init())
+        let today = Calendar.current.startOfDay(for: .now)
         if today > dayStart {
             dayStart = today
-            dailyTimeBasedCount = 0
+            interjectionCount = 0
         }
     }
-    
-    
+}
+
+
+
+extension ChatState {
     
     /// What to do next
     enum NextStep {
         
         /// Send an autonomous interjection message
         case interject
+    }
+}
+
+
+
+// MARK: - Logging
+
+private extension TGChat {
+    var nameForLog: String {
+        self.title
+        ?? self.firstName.map { firstName in
+            if let lastName {
+                "\(firstName) \(lastName)"
+            }
+            else {
+                firstName
+            }
+        }
+        ?? self.username
+        ?? self.id.description
     }
 }
