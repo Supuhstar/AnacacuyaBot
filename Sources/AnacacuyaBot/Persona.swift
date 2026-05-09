@@ -10,6 +10,7 @@ import Foundation
 
 
 let inEverySystemPrompt = """
+Your name is Luna Nightshade (they/them).
 Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER a prefix, NEVER boilerplate.
 """
 
