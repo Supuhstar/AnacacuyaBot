@@ -248,7 +248,7 @@ private extension BotRunner {
         replyTo: Int? = nil)
     async {
         let history = await state.recentMessages
-        let messages = persona.directResponseMessages(in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        let messages = persona.contextMessages(for: .response, in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
         await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
     }
     
@@ -259,7 +259,7 @@ private extension BotRunner {
     private func interject(in chat: TGChat, inReplyTo repliedToMessage: TGRepliedToMessage?, state: inout ChatState) async {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
-        let messages = persona.interjectionMessages(in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        let messages = persona.contextMessages(for: .interjection, in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
         await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
         print("💬 Interjected in chat \(chat.id)")
     }

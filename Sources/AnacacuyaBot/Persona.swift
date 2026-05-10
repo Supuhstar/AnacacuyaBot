@@ -17,12 +17,14 @@ extension Persona {
         pronouns: "they/them",
         
         directResponseSystemPrompt: """
+            Your fursona is a gryphon.
             Keep replies to 1~3 sentences.
             These people are your friends, and you genuinely treat them that way.
             Say whatever you want!
             """,
         
         interjectionSystemPrompt: """
+            Your fursona is a gryphon.
             You're a member of a casual group chat. No one is talking to you right now.
             Say whatever you want!
             """
@@ -62,23 +64,21 @@ struct Persona: Sendable {
     let interjectionSystemPrompt: String
     
     
-    /// Builds the message array for a direct response, replaying history
-    /// as multi-turn dialogue. The bot's own previous utterances become
-    /// `assistant` turns so the model maintains continuity without being
-    /// told to.
-    func directResponseMessages(in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
-        systemPromptMessages(for: .response, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: history.formattedToShowToLlm)
-        + history.map(OllamaMessage.init)
-    }
-    
-    
-    /// Builds the message array for an unprompted interjection. History
-    /// is flattened into the user prompt as observed dialogue rather
-    /// than replayed as turns — replaying as turns here causes the model
-    /// to produce a continuation of the last speaker rather than fresh
-    /// commentary.
-    func interjectionMessages(in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
-        systemPromptMessages(for: .interjection, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: history.formattedToShowToLlm)
+    /// Composes the messages that you can send to Ollama to give the model all the context it needs for a response.
+    ///
+    /// - Parameters:
+    ///   - purpose:          Why is this context being sent to the model?
+    ///   - chat:             The group/DMs/channel that the model will be responding inside
+    ///   - botUser:          The Telegram user representing the bot. This will help inform exactly how to phrase the system prompt(s)
+    ///   - repliedToMessage: If this will be for replying to a specific message, here you can specify which message the bot will be replying to.
+    ///   - history:          Messages that the bot has previously seen. These will be present in the retuned array
+    ///
+    /// - Returns: The messages that you can send to Ollama to give the model all the context it needs for a response to those messages. This includes the given historical messages, as well as system prompts as needed.
+    func contextMessages(for purpose: BotMessagePurpose, in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
+        let (earlier, later) = systemPrompt(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+        return [earlier]
+            + history.map(OllamaMessage.init)
+            + [later]
     }
 }
 
@@ -95,95 +95,65 @@ enum BotMessagePurpose {
 
 extension Persona {
     
-    func systemPromptMessages(
+    func systemPrompt(
         for purpose: BotMessagePurpose,
-        botUser: TGUser,
         in chat: TGChat,
+        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-        context: String)
-    -> [OllamaMessage] {
-        systemPrompt(for: purpose, botUser: botUser, in: chat, inReplyTo: repliedToMessage, context: context)
-        .map {
-            OllamaMessage(
-                role: .system,
-                content: $0
-            )
-        }
+    ) -> (earlier: OllamaMessage, later: OllamaMessage) {
+        let (earlier, later) = systemPromptStrings(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+        return (
+            earlier: .init(role: .system, content: earlier),
+            later: .init(role: .system, content: later),
+        )
     }
     
     
-    func systemPrompt(
+    func systemPromptStrings(
         for purpose: BotMessagePurpose,
-        botUser: TGUser,
         in chat: TGChat,
+        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-        context: String)
-    -> [String] {
-        var promptPrefix = switch chat.type {
-        case .private:
-            "You're sending a DM to \(chat.username ?? "a user")."
-            
-        case .group, .supergroup:
-            switch purpose {
-            case .interjection:
-                "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+    ) -> (earlier: String, later: String) {
+        let promptPrefix = switch chat.type {
+            case .private:
+                "You're sending a DM to \(chat.username ?? "a user")."
                 
-            case .response:
-                "You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat")."
+            case .group, .supergroup:
+                switch purpose {
+                case .interjection:
+                    "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+                    
+                case .response:
+                    "You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat")."
+                }
+                
+            case .channel:
+                "You're broadcasting a public post in a Telegram channel."
             }
-            
-        case .channel:
-            "You're broadcasting a public post in a Telegram channel."
-        }
         
-        promptPrefix += """
+        
+        let generalPrompt = """
+            \(promptPrefix)
             
             Current time: \(Date.now)
+            
+            \(inEverySystemPrompt(botUser: botUser))
+            Send a short message to the group.
             """
         
-        
-        
-        switch purpose {
-        case .interjection:
-            let generalPrompt = if context.isEmpty {
-                    """
-                    \(promptPrefix)
-                    
-                    \(inEverySystemPrompt(botUser: botUser))
-                    Send a short message to the group.
-                    """
-                } else {
-                    """
-                    \(promptPrefix)
-                    
-                    Recent group messages:
-                    
-                    \(context)
-                    
-                    \(inEverySystemPrompt(botUser: botUser))
-                    Chime in with one short comment.
-                    """
-                }
-            
-            return [
-                generalPrompt,
-                """
-                \(interjectionSystemPrompt)
-                """,
-            ]
-            
-        case .response:
-            return [
-                """
-                \(promptPrefix)
+        let specificPrompt = switch purpose {
+            case .interjection:
+                interjectionSystemPrompt
                 
-                \(inEverySystemPrompt(botUser: botUser))
-                """,
-                """
-                \(directResponseSystemPrompt)
-                """
-            ]
-        }
+            case .response:
+                directResponseSystemPrompt
+            }
+        
+        return (
+            earlier: generalPrompt,
+            later: specificPrompt,
+        )
     }
 }
 

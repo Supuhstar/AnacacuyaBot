@@ -24,29 +24,36 @@ struct PromptCommand: BotCommand {
     func run(with userInput: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
         
         func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) -> String {
-            context.persona
-                .systemPrompt(
+            let (earlier, later) = context.persona
+                .systemPromptStrings(
                     for: purpose,
-                    botUser: context.botUser,
                     in: .anyChat(type: chatType),
+                    botUser: context.botUser,
                     inReplyTo: .init(context.commandMessage),
-                    context: exampleContext)
-                .joined(separator: "\n")
+                )
+            
+            return """
+                \(earlier)
+                
+                \(exampleContext)
+                
+                \(later)
+                """
         }
         
         return [
             .text("""
-                *When interjecting in a group*
+                __*When interjecting in a group:*__
                 \(systemPrompt(for: .interjection, in: .group))
                 """),
             
             .text("""
-                *When replying in a group:*
+                __*When replying in a group:*__
                 \(systemPrompt(for: .response, in: .group))
                 """),
             
             .text("""
-                *When replying in DMs:*
+                __*When replying in DMs:*__
                 \(systemPrompt(for: .response, in: .private))
                 """),
         ]
