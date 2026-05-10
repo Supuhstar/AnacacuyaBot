@@ -82,23 +82,6 @@ extension TGUser {
 
 
 
-struct TGChat: Decodable, Sendable, Identifiable {
-    let id: Int64
-    let type: TGChatType
-    let title: String?
-    
-    let username: String?
-    let firstName: String?
-    let lastName: String?
-}
-
-
-
-extension TGChat {
-    var groupNameForLlm: String {
-        title ?? username ?? "a group chat"
-    }
-}
 
 
 
