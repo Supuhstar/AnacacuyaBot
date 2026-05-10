@@ -178,7 +178,7 @@ private extension Persona {
         
         return """
             \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames").
-            Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
+            Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate. You're allowed to use MarkdownV2.
             """
     }
 }
