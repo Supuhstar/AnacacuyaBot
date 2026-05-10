@@ -26,7 +26,7 @@ actor OllamaClient {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 120
+        req.timeoutInterval = Limits.maxTimeToWaitForModelResponse.timeInterval
 
         struct Body: Encodable {
             let model: String

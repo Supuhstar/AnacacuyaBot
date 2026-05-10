@@ -82,7 +82,7 @@ extension BotRunner {
     /// children of a single task group, so cancellation propagates
     /// uniformly and lifecycle is one thing instead of two.
     func run() async {
-        await withTaskGroup(of: Void.self) { group in
+        await withTaskGroup { group in
             group.addTask { await self.listenForAllMessages() }
             group.addTask { await self.runTimeBasedInterjector() }
         }
@@ -108,14 +108,21 @@ private extension BotRunner {
         print("📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
-                let updates = try await telegram.getUpdates(timeout: 30)
+                let updates = try await telegram.getUpdates()
                 for update in updates {
                     if let message = update.message {
                         try await handleMessage(message)
                     }
                 }
-            } catch {
-                print("⚠️ Update error: \(error). Backing off 5s.")
+            }
+            catch {
+                if let error = error as? TelegramClient.UpdateError {
+                    print("⚠️", error.localizedDescription)
+                }
+                else {
+                    print("⚠️ Update error:", error)
+                }
+                print("Backing off for 5s...")
                 try? await Task.sleep(for: .seconds(5))
             }
         }

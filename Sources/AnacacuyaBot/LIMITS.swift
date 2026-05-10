@@ -28,3 +28,12 @@ extension Limits {
 extension Limits {
     static let contextWindow_messageCount = 15
 }
+
+
+
+// MARK: - Networking limits
+
+extension Limits {
+    static let maxTimeToWaitForModelResponse: Duration = .seconds(120)
+    static let maxTimeToWaitForNewTelegramMessages: Duration = .seconds(30)
+}

@@ -40,19 +40,25 @@ actor TelegramClient {
     }
     
     
-    func getUpdates(timeout: Int = 30) async throws -> [TGUpdate] {
+    func getUpdates() async throws -> [TGUpdate] {
         var comps = URLComponents(string: "\(base)/getUpdates")!
         comps.queryItems = [
             URLQueryItem(name: "offset", value: "\(offset)"),
-            URLQueryItem(name: "timeout", value: "\(timeout)"),
+            URLQueryItem(name: "timeout", value: "\(Int(Limits.maxTimeToWaitForNewTelegramMessages.timeInterval))"),
             URLQueryItem(name: "allowed_updates", value: #"["message"]"#),
         ]
         let (data, _) = try await URLSession.shared.data(from: comps.url!)
-        let response = try TGGetUpdatesResponse(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
-        if let last = response.result.last {
-            offset = last.updateId + 1
+        
+        do {
+            let response = try TGGetUpdatesResponse(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
+            if let last = response.result.last {
+                offset = last.updateId + 1
+            }
+            return response.result
         }
-        return response.result
+        catch {
+            throw UpdateError.unexpectedUpdate(data)
+        }
     }
     
     
@@ -70,6 +76,19 @@ actor TelegramClient {
            !(200..<299).contains(httpResponse.statusCode)
         {
             print("❌ \(httpResponse.statusCode) error: \(String(data: response.0, encoding: .utf8) ?? "(couldn't decode response)")")
+        }
+    }
+    
+    
+    
+    enum UpdateError: Error {
+        case unexpectedUpdate(Data)
+        
+        
+        var localizedDescription: String {
+            switch self {
+            case .unexpectedUpdate(let data): return "Unexpected update: \(String(data: data, encoding: .utf8) ?? "<COULD NOT DECODE>")"
+            }
         }
     }
 }
