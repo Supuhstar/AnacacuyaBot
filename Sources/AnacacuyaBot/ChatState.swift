@@ -140,7 +140,7 @@ extension ChatState {
     
     var shouldInterjectNow: Bool {
         0 >= messagesUntilCountTrigger
-        || interjectionCount >= maxDailyInterjections
+        && stillAllowedToInterjectToday()
     }
     
     
