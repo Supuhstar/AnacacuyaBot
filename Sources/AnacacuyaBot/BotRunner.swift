@@ -31,6 +31,7 @@ struct BotRunner: Sendable {
     let store: ChatStateStore
     let persona: Persona
     let commands: [any BotCommand]
+    let limiter: BotLimiter
     
     /// Bot's own username, resolved at startup via `getMe`. Used for
     /// detecting `@` mentions and identifying replies to the bot's own
@@ -72,6 +73,7 @@ extension BotRunner {
             commands: [
                 PromptCommand(),
             ],
+            limiter: BotLimiter(),
             botUsername: username,
         )
     }
@@ -170,6 +172,10 @@ private extension BotRunner {
         // Uncomment when you're testing in production:
 //        return try await send(message: "😴💤 [I'm in maintenance mode]", inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
         
+        guard await limiter.isStillWithinDailyMessageLimit() else {
+            return
+        }
+        
         let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false, isReply: nil != userMessage.replyToMessage)
         let nextStep = await state.register(didReceiveMessage: chatMessage)
         
@@ -195,6 +201,9 @@ private extension BotRunner {
 private extension BotRunner {
     func send(message: String, inChat chatId: TGChat.ID, replyingTo replyTo: TGMessage.ID?, chatState state: inout ChatState) async throws {
         guard false == message.isEmpty else { return }
+        
+        await limiter.registerDidSendMessage()
+        
         try await telegram.sendMessage(chatId: chatId, text: message.telegram_escapedForMarkdownV2, replyTo: replyTo)
         await state.register(didSendMessage: ChatMessage(
             senderName: botUsername,
@@ -348,5 +357,40 @@ private extension BotRunner {
     /// operator must address; retrying won't help.
     enum BotError: Error {
         case missingToken
+    }
+}
+
+
+
+// MARK: - Global limiter
+
+actor BotLimiter {
+    private var todayStart: Date = .distantPast
+    private var totalMessagesToday = 0
+    private let maxMessagesPerDay = Limits.maxTotalMessagesSentPerDay
+    
+    
+    
+    func registerDidSendMessage() {
+        rolloverDayIfNeeded()
+        totalMessagesToday += 1
+    }
+    
+    
+    func isStillWithinDailyMessageLimit() -> Bool {
+        rolloverDayIfNeeded()
+        return totalMessagesToday <= maxMessagesPerDay
+    }
+    
+    
+    /// Lazily resets the daily counter when the local day has advanced.
+    /// Called from every read or write of the time-based budget, so we
+    /// never need a separate timer firing at midnight.
+    private func rolloverDayIfNeeded() {
+        let today = Calendar.current.startOfDay(for: .now)
+        if today > todayStart {
+            todayStart = today
+            totalMessagesToday = 0
+        }
     }
 }

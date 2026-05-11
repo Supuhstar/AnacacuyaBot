@@ -13,6 +13,10 @@ enum Limits {}
 
 extension Limits {
     
+    // MARK: Total interactions
+    
+    static let maxTotalMessagesSentPerDay = 2000
+    
     // MARK: Autonomous interactions
     
     static let maxAutonomousMessagesPerDay = 4
