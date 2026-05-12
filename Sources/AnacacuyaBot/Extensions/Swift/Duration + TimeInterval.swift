@@ -9,7 +9,7 @@ import Foundation
 
 
 
-let attosecondsPerSecond: TimeInterval = 10e18
+let attosecondsPerSecond: TimeInterval = 1e18
 
 
 

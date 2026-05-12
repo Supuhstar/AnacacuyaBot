@@ -63,7 +63,9 @@ extension BotRunner {
         
         let telegram = try await TelegramClient(token: token)
         let me = telegram.botUser
-        let username = me.username ?? "bot"
+        guard let username = me.username else {
+            throw BotError.noUsername
+        }
         
         print("🤖 Logged in as @\(username) | model: \(model)")
         
@@ -113,12 +115,13 @@ private extension BotRunner {
         print("📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
-                let updates = try await telegram.getUpdates()
-                for update in updates {
-                    if let message = update.message {
-                        try await handleIncomingMessage(message)
-                    }
-                }
+                try await handleIncomingMessage(.init(messageId: 0, from: nil, chat: TGChat.init(id: 0, type: .supergroup, title: "Demo group", username: "DemoGroup", firstName: "Example", lastName: "Chat"), text: "/debug_fullcontext", replyToMessage: nil, entities: nil))
+//                let updates = try await telegram.getUpdates()
+//                for update in updates {
+//                    if let message = update.message {
+//                        try await handleIncomingMessage(message)
+//                    }
+//                }
             }
             catch {
                 if let error = error as? TelegramClient.UpdateError {
@@ -152,20 +155,21 @@ private extension BotRunner {
         
         var state = await store.state(for: incomingMessage.chat)
         
+        
         if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
             return print("Command result:", commandResult)
         }
         
-        await sendLlmMessage(
-            chatState: &state,
-            incomingMessage: ChatMessage(
-                incomingMessage,
-                sender: sender,
-                wholeUserText: wholeUserText,
-            ),
-            shouldRespondToMessage: shouldRespondToMessage,
-            inReplyTo: incomingMessage.replyToMessage,
-        )
+//        await sendLlmMessage(
+//            chatState: &state,
+//            incomingMessage: ChatMessage(
+//                incomingMessage,
+//                sender: sender,
+//                wholeUserText: wholeUserText,
+//            ),
+//            shouldRespondToMessage: shouldRespondToMessage,
+//            inReplyTo: incomingMessage.replyToMessage,
+//        )
     }
     
     
@@ -206,7 +210,7 @@ private extension BotRunner {
                 }
             }
             
-            return .suceeded
+            return .succeeded
         }
         
         return .none
@@ -254,7 +258,7 @@ private extension BotRunner {
     
     
     enum CommandRunResult {
-        case suceeded
+        case succeeded
     }
 }
 
@@ -356,13 +360,13 @@ internal extension BotRunner {
     ///
     /// - Returns: An array of message ready to send to the bot so it can synthesize a reply.
     func contextMessages(
-        for: BotMessagePurpose,
+        for purpose: BotMessagePurpose,
         state: ChatState,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async -> [ChatMessage] {
         let history = await state.recentMessages
-        return persona.contextMessages(for: .response, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        return persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
     }
 }
 
@@ -468,6 +472,7 @@ private extension BotRunner {
     /// operator must address; retrying won't help.
     enum BotError: Error {
         case missingToken
+        case noUsername
     }
 }
 
@@ -490,7 +495,7 @@ actor BotLimiter {
     
     func isStillWithinDailyMessageLimit() -> Bool {
         rolloverDayIfNeeded()
-        return totalMessagesToday <= maxMessagesPerDay
+        return totalMessagesToday < maxMessagesPerDay
     }
     
     
