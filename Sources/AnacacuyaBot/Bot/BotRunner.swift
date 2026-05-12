@@ -317,19 +317,34 @@ private extension BotRunner {
         .private == msg.chat.type
     }
     
+    
     /// Reports whether a message addresses the bot directly. Both the
     /// raw text and any structured mention entities are checked because
     /// some clients send entities, some don't, and a substring check
     /// catches both cases without depending on entity reliability.
+    ///
+    /// Mention entities use UTF-16 code-unit offsets per Telegram's spec,
+    /// so the entity walk indexes into `text.utf16` rather than `text`
+    /// directly. Using Character offsets on UTF-16 counts silently shifts
+    /// mentions past any emoji or non-BMP character earlier in the message.
     private func isMentioned(_ msg: TGMessage) -> Bool {
         guard let text = msg.text else { return false }
         if text.localizedCaseInsensitiveContains("@\(botUsername)") { return true }
+        
         guard let entities = msg.entities else { return false }
-        for entity in entities where entity.type == "mention" {
-            if let start = text.index(text.startIndex, offsetBy: entity.offset, limitedBy: text.endIndex),
-               let end = text.index(start, offsetBy: entity.length, limitedBy: text.endIndex) {
-                let mentioned = String(text[start..<end])
-                if mentioned.lowercased() == "@\(botUsername.lowercased())" { return true }
+        let utf16 = text.utf16
+        let target = "@\(botUsername.lowercased())"
+        
+        for entity in entities where "mention" == entity.type {
+            guard let start = utf16.index(utf16.startIndex, offsetBy: entity.offset, limitedBy: utf16.endIndex),
+                  let end = utf16.index(start, offsetBy: entity.length, limitedBy: utf16.endIndex)
+            else {
+                continue
+            }
+            
+            let mentioned = String(decoding: utf16[start..<end], as: UTF16.self)
+            if mentioned.lowercased() == target {
+                return true
             }
         }
         return false

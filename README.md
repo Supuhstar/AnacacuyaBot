@@ -51,7 +51,7 @@ The bot adopts a persona when it's using its LLM to generate messages. You can c
 
 This bot can accept commands. These are in the form of `/command arg1:val1 arg2:val2 Any arbitrary text you want`. Optionally you can also specify this bot by placing its `@handle` on the command name, like `/prompt@AnacacuyaBot`.
 
-When a command has an argument, it's given in the form of `label:value`. For example, if you're telling the bot to print out its current context, you might send `/debug:fullcontext purpose:interjection`.
+When a command has an argument, it's given in the form of `label:value`. For example, if you're telling the bot to print out its current context, you might send `/debug_fullcontext purpose:interjection`.
 
 > ℹ️ If what you send just looks like a command but isn't one, then it'll be sent to the LLM just like any other message.
 
@@ -62,7 +62,7 @@ You can send the following commands to this bot:
 Only sends the current system prompts to the current chat
 
 
-### `/debug:fullcontext`
+### `/debug_fullcontext`
 Sends all messages in its context to the current chat.
 
 > ⚠️ This command spams the chat with its full context (history of seen messages + system prompts). ONLY use this if absolutely necessary
