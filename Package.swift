@@ -26,6 +26,8 @@ let package = Package(
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
             ],
             swiftSettings: [
+                .strictMemorySafety(),
+                .treatAllWarnings(as: .error),
                 .unsafeFlags([
                     "-enable-bare-slash-regex",
                 ])

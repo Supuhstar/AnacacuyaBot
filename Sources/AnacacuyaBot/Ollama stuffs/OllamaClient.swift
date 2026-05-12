@@ -22,12 +22,12 @@ actor OllamaClient {
     }
     
     
-    func chat(context: [ChatMessage]) async throws -> String {
+    nonisolated func chat(context: [ChatMessage]) async throws -> String {
         try await chat(context: context.map(OllamaMessage.init))
     }
     
     
-    func chat(context: [OllamaMessage]) async throws -> String {
+    nonisolated func chat(context: [OllamaMessage]) async throws -> String {
         let url = URL(string: "\(baseURL)/api/chat")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"

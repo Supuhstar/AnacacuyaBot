@@ -63,7 +63,9 @@ extension BotRunner {
         
         let telegram = try await TelegramClient(token: token)
         let me = telegram.botUser
-        let username = me.username ?? "bot"
+        guard let username = me.username else {
+            throw BotError.noUsername
+        }
         
         print("🤖 Logged in as @\(username) | model: \(model)")
         
@@ -113,12 +115,13 @@ private extension BotRunner {
         print("📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
-                let updates = try await telegram.getUpdates()
-                for update in updates {
-                    if let message = update.message {
-                        try await handleIncomingMessage(message)
-                    }
-                }
+                try await handleIncomingMessage(.init(messageId: 0, from: nil, chat: TGChat.init(id: 0, type: .supergroup, title: "Demo group", username: "DemoGroup", firstName: "Example", lastName: "Chat"), text: "/debug_fullcontext", replyToMessage: nil, entities: nil))
+//                let updates = try await telegram.getUpdates()
+//                for update in updates {
+//                    if let message = update.message {
+//                        try await handleIncomingMessage(message)
+//                    }
+//                }
             }
             catch {
                 if let error = error as? TelegramClient.UpdateError {
@@ -152,20 +155,21 @@ private extension BotRunner {
         
         var state = await store.state(for: incomingMessage.chat)
         
+        
         if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
             return print("Command result:", commandResult)
         }
         
-        await sendLlmMessage(
-            chatState: &state,
-            incomingMessage: ChatMessage(
-                incomingMessage,
-                sender: sender,
-                wholeUserText: wholeUserText,
-            ),
-            shouldRespondToMessage: shouldRespondToMessage,
-            inReplyTo: incomingMessage.replyToMessage,
-        )
+//        await sendLlmMessage(
+//            chatState: &state,
+//            incomingMessage: ChatMessage(
+//                incomingMessage,
+//                sender: sender,
+//                wholeUserText: wholeUserText,
+//            ),
+//            shouldRespondToMessage: shouldRespondToMessage,
+//            inReplyTo: incomingMessage.replyToMessage,
+//        )
     }
     
     
@@ -206,7 +210,7 @@ private extension BotRunner {
                 }
             }
             
-            return .suceeded
+            return .succeeded
         }
         
         return .none
@@ -254,7 +258,7 @@ private extension BotRunner {
     
     
     enum CommandRunResult {
-        case suceeded
+        case succeeded
     }
 }
 
@@ -313,19 +317,34 @@ private extension BotRunner {
         .private == msg.chat.type
     }
     
+    
     /// Reports whether a message addresses the bot directly. Both the
     /// raw text and any structured mention entities are checked because
     /// some clients send entities, some don't, and a substring check
     /// catches both cases without depending on entity reliability.
+    ///
+    /// Mention entities use UTF-16 code-unit offsets per Telegram's spec,
+    /// so the entity walk indexes into `text.utf16` rather than `text`
+    /// directly. Using Character offsets on UTF-16 counts silently shifts
+    /// mentions past any emoji or non-BMP character earlier in the message.
     private func isMentioned(_ msg: TGMessage) -> Bool {
         guard let text = msg.text else { return false }
         if text.localizedCaseInsensitiveContains("@\(botUsername)") { return true }
+        
         guard let entities = msg.entities else { return false }
-        for entity in entities where entity.type == "mention" {
-            if let start = text.index(text.startIndex, offsetBy: entity.offset, limitedBy: text.endIndex),
-               let end = text.index(start, offsetBy: entity.length, limitedBy: text.endIndex) {
-                let mentioned = String(text[start..<end])
-                if mentioned.lowercased() == "@\(botUsername.lowercased())" { return true }
+        let utf16 = text.utf16
+        let target = "@\(botUsername.lowercased())"
+        
+        for entity in entities where "mention" == entity.type {
+            guard let start = utf16.index(utf16.startIndex, offsetBy: entity.offset, limitedBy: utf16.endIndex),
+                  let end = utf16.index(start, offsetBy: entity.length, limitedBy: utf16.endIndex)
+            else {
+                continue
+            }
+            
+            let mentioned = String(decoding: utf16[start..<end], as: UTF16.self)
+            if mentioned.lowercased() == target {
+                return true
             }
         }
         return false
@@ -356,13 +375,13 @@ internal extension BotRunner {
     ///
     /// - Returns: An array of message ready to send to the bot so it can synthesize a reply.
     func contextMessages(
-        for: BotMessagePurpose,
+        for purpose: BotMessagePurpose,
         state: ChatState,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async -> [ChatMessage] {
         let history = await state.recentMessages
-        return persona.contextMessages(for: .response, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        return persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
     }
 }
 
@@ -468,6 +487,7 @@ private extension BotRunner {
     /// operator must address; retrying won't help.
     enum BotError: Error {
         case missingToken
+        case noUsername
     }
 }
 
@@ -490,7 +510,7 @@ actor BotLimiter {
     
     func isStillWithinDailyMessageLimit() -> Bool {
         rolloverDayIfNeeded()
-        return totalMessagesToday <= maxMessagesPerDay
+        return totalMessagesToday < maxMessagesPerDay
     }
     
     

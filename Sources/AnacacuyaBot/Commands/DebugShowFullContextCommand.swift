@@ -20,12 +20,12 @@ struct DebugShowFullContextCommand: BotCommand {
     
     static let help: String = """
         This command sends all the messages in the current context.
-        ⚠️ This will spam the current chat by sending each message as it was seen by the bot. Only use this if you're actually debigging the bot's context.
+        ⚠️ This will spam the current chat by sending each message as it was seen by the bot. Only use this if you're actually debugging the bot's context.
         """
     
     
     func run(arguments: [BotCommandArgument], remainingText: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
-        await context.fullContextMessageHistory(nil == context.commandMessage.replyToMessage ? .interjection : .response)
+        await context.fullContextMessageHistory(arguments.purpose ?? (nil == context.commandMessage.replyToMessage ? .interjection : .response))
             .map(CommandResponse.message(_:))
     }
 }

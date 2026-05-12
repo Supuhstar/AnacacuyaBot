@@ -78,10 +78,16 @@ extension ChatMessage {
     
     
     var contentForLlm: String {
-        """
-        \(senderName):
-        \(text)
-        """
+        switch role {
+        case .system:
+            text
+            
+        case .assistant, .user:
+            """
+            \(senderName):
+            \(text)
+            """
+        }
     }
 }
 

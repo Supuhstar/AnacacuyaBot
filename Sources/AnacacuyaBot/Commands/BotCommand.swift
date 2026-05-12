@@ -77,11 +77,11 @@ extension BotCommand {
     
     
     /// Parses the raw text of the command into something easier for us to use
-    /// 
+    ///
     /// - Parameters:
     ///   - wholeUserText: The entire text of the message the user sent, without modification
     ///   - botUser:       This bot's Telegram user account
-    ///   
+    ///
     /// - Returns: The parsed command, iff parsing was successful
     static func parsing(_ wholeUserText: String, as botUser: TGUser) -> ParsedBotCommand? {
         guard let parsed = ParsedBotCommand(wholeUserText),
@@ -115,7 +115,7 @@ struct ParsedBotCommand {
     ///
     /// Examples:
     /// - `/remind in:2w Work on motorcycle` ➡️ `(arguments: [(name: "in", value: "2w")], arbitraryUserText: "Work on motorcylce")`
-    /// - `/debug:fullcontext purpose:interjection` ➡️ `(arguments: [(name: "purpose", value: "interjection"], arbitraryUserText: nil)`
+    /// - `/debug_fullcontext purpose:interjection` ➡️ `(arguments: [(name: "purpose", value: "interjection"], arbitraryUserText: nil)`
     /// - `/ban @KyNorthstar being weird` ➡️ `(arguments: [], arbitraryUserText: "@KyNorthstar being weird")`
     /// - `/help` ➡️ `(arguments: [], arbitraryUserText: nil)`
     let body: Body
@@ -138,6 +138,7 @@ extension ParsedBotCommand {
     ///
     /// - Parameter messageText: The whole message the user sent, unmodified
     init?(_ messageText: String) {
+        let messageText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         // /<name>[@<taggedBotUser>][ <tail>]
         let commandRegex = /^\/(?<name>\w+?)(?:@(?<taggedBotUser>\w+))?(?:\s+(?<tail>.+?))?\s*$/
         
@@ -168,7 +169,8 @@ extension ParsedBotCommand {
             remainder = remainder[match.range.upperBound...]
         }
         
-        return (arguments, true == remainder.isEmpty ? nil : remainder)
+        return (arguments: arguments,
+                arbitraryUserText: remainder.nonEmptyOrNil?.trimmingCharacters(in: .whitespacesAndNewlines)[...]) //[...]: This converts the string into a substring, which is what the `Body` return type expects.
     }
 }
 
@@ -187,7 +189,7 @@ public struct BotCommandArgument: Equatable, Hashable {
 
 
 /// Meta-info for a bot to best understand what to do when given a command
-public struct CommandContext {
+public struct CommandContext: Sendable {
     
     /// The bot's persona which was loaded when this command was run.
     let persona: Persona
@@ -199,7 +201,7 @@ public struct CommandContext {
     let botUser: TGUser
     
     /// Composes all the messages the bot saw when collecting context for its response
-    let fullContextMessageHistory: (BotMessagePurpose) async -> [ChatMessage]
+    let fullContextMessageHistory: @Sendable (BotMessagePurpose) async -> [ChatMessage]
 }
 
 
