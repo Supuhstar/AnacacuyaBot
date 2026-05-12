@@ -30,6 +30,7 @@ import Foundation
 /// Obtain instances via `ChatStateStore.state(for:)` rather than
 /// constructing directly — the store guarantees one instance per chat ID.
 actor ChatState {
+    
     /// Telegram chat ID this state belongs to. Stored so the interjector
     /// can route outbound messages without a separate lookup.
     let chat: TGChat
@@ -68,7 +69,7 @@ actor ChatState {
     /// Range from which each fresh message-count target is drawn. The
     /// lower bound prevents the bot from reacting to short bursts of
     /// activity; the upper keeps it from going silent in slow channels.
-    private static let messageCountTriggerRange 
+    private let messageCountTriggerRange
         = Limits.minMessagesBeforeAutonomousMessageAllowed ... Limits.maxMessagesBeforeAutonomousMessageGuaranteed
     
     
@@ -146,7 +147,7 @@ extension ChatState {
     
     func registerInterjection() {
         interjectionCount += 1
-        messagesUntilCountTrigger = Int.random(in: Self.messageCountTriggerRange)
+        messagesUntilCountTrigger = Int.random(in: messageCountTriggerRange)
         
         if stillAllowedToInterjectToday() {
             print(chat.nameForLog, "•", "Interjection \(interjectionCount)/\(maxDailyInterjections). Next interjection in \(messagesUntilCountTrigger) messages")

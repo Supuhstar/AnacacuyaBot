@@ -11,20 +11,19 @@ import Foundation
 
 extension Persona {
     
-    /// The default persona of the bot
-    static let `default` = Persona(
+    /// Luna Nightshade is the persona that the bot came up with on first-run.
+    static let lunaNightshade = Persona(
         name: "Luna Nightshade",
         pronouns: "they/them",
+        fursona: "a gryphon",
         
         directResponseSystemPrompt: """
-            Your fursona is a gryphon.
-            Keep replies to 1~3 sentences.
+            Keep your reply to 1~3 sentences at MOST.
             These people are your friends, and you genuinely treat them that way.
             Say whatever you want!
             """,
         
         interjectionSystemPrompt: """
-            Your fursona is a gryphon.
             You're a member of a casual group chat. No one is talking to you right now.
             Say whatever you want!
             """
@@ -53,6 +52,7 @@ struct Persona: Sendable {
     
     var name: String? = nil
     var pronouns: String? = nil
+    var fursona: String? = nil
     
     /// System prompt for direct responses. Sets the voice for replies
     /// that participate in turn-taking dialogue.
@@ -74,17 +74,17 @@ struct Persona: Sendable {
     ///   - history:          Messages that the bot has previously seen. These will be present in the retuned array
     ///
     /// - Returns: The messages that you can send to Ollama to give the model all the context it needs for a response to those messages. This includes the given historical messages, as well as system prompts as needed.
-    func contextMessages(for purpose: BotMessagePurpose, in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [OllamaMessage] {
+    func contextMessages(for purpose: BotMessagePurpose, in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [ChatMessage] {
         let (earlier, later) = systemPrompt(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
         return [earlier]
-            + history.map(OllamaMessage.init)
+            + history
             + [later]
     }
 }
 
 
 
-enum BotMessagePurpose {
+enum BotMessagePurpose: String {
     case interjection
     case response
 }
@@ -100,11 +100,11 @@ extension Persona {
         in chat: TGChat,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) -> (earlier: OllamaMessage, later: OllamaMessage) {
+    ) -> (earlier: ChatMessage, later: ChatMessage) {
         let (earlier, later) = systemPromptStrings(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
         return (
-            earlier: .init(role: .system, content: earlier),
-            later: .init(role: .system, content: later),
+            earlier: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: earlier),
+            later: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: later)
         )
     }
     
@@ -122,14 +122,20 @@ extension Persona {
             case .group, .supergroup:
                 switch purpose {
                 case .interjection:
-                    "You're talking in \(chat.title ?? chat.username ?? "a group chat")."
+                    """
+                    You're talking in \(chat.title ?? chat.username ?? "a group chat").
+                    If you respond to more than one person, you MUST use their @handle, NEVER just use their username.
+                    """
                     
                 case .response:
-                    "You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat")."
+                    """
+                    You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat").
+                    If you respond to more than one person, you MUST use their @handle, NEVER just use their username.
+                    """
                 }
                 
             case .channel:
-                "You're broadcasting a public post in a Telegram channel."
+                "You're broadcasting a public post in the Telegram channel \(chat.title ?? chat.username ?? "")".trimmingCharacters(in: .whitespacesAndNewlines)
             }
         
         
@@ -164,7 +170,7 @@ private extension Persona {
     func inEverySystemPrompt(botUser: TGUser) -> String {
         var preface = ""
         
-        if let name = name {
+        if let name {
             if let pronouns {
                 preface += "Your name is \(name) (\(pronouns)). "
             }
@@ -176,9 +182,15 @@ private extension Persona {
             preface += "Your pronouns are \(pronouns). "
         }
         
+        if let fursona {
+            preface += "Your fursona is \(fursona). "
+        }
+        
         return """
-            \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames").
-            Whatever you say will be the body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate. You're allowed to use MarkdownV2.
+            \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
+            Whatever you say nexr will be the ENTIRE body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
+            You NEVER speak as if you're someone else in the chat.
+            You're allowed to use MarkdownV2.
             """
     }
 }
@@ -244,34 +256,20 @@ extension Persona {
 
 
 
-// MARK: - Conveniences
-
-extension ChatMessage {
-    var formattedToShowToLlm: String {
-        "\(senderName): \(text)"
-    }
-}
-
-
-
-extension [ChatMessage] {
-    var formattedToShowToLlm: String {
-        map(\.formattedToShowToLlm)
-        .joined(separator: "\n\n")
-    }
-}
-
-
-
-extension OllamaMessage {
-    init(_ telegramMessage: ChatMessage) {
-        let role: OllamaMessage.Role = telegramMessage.isBot
-            ? .assistant
-            : .user
-        let content = telegramMessage.isBot
-            ? telegramMessage.text
-            : "\(telegramMessage.senderName): \(telegramMessage.text)"
-            
-        self.init(role: role, content: content)
-    }
-}
+//extension ChatMessage {
+//    init(_ telegramMessage: ChatMessage) {
+//        let role: ChatMessage.Role = telegramMessage.role
+//        let content = switch role {
+//            case .system:
+//                "[SYSTEM: \(telegramMessage.text)]"
+//                
+//            case .assistant:
+//                telegramMessage.text
+//                
+//            case .user:
+//                "\(telegramMessage.senderName): \(telegramMessage.text)"
+//            }
+//            
+//        self.init(senderName: <#T##String#>, text: <#T##String#>, role: <#T##Role#>, isReply: <#T##Bool#>)
+//    }
+//}

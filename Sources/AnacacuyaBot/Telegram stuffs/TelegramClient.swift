@@ -62,13 +62,13 @@ actor TelegramClient {
     }
     
     
-    func sendMessage(chatId: Int64, text: String, replyTo: Int? = nil) async throws {
-        print("🗣️\(nil == replyTo ? "🤖" : "👩🏽‍💻"):", text)
+    func sendMessage(chatId: Int64, text: String, inReplyTo: Int? = nil) async throws {
+        print("🗣️\(nil == inReplyTo ? "🤖" : "👩🏽‍💻"):", text)
         let url = URL(string: "\(base)/sendMessage")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body = TGSendMessageBody(chatId: chatId, text: text, replyToMessageId: replyTo, parseMode: .markdown)
+        let body = TGSendMessageBody(chatId: chatId, text: text, replyToMessageId: inReplyTo, parseMode: .markdown)
         req.httpBody = try body.jsonData(keyEncodingStrategy: keyEncodingStrategy)
         let response = try await URLSession.shared.data(for: req)
         

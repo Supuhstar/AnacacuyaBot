@@ -20,8 +20,14 @@ actor OllamaClient {
         self.baseURL = baseURL
         self.model = model
     }
-
-    func chat(messages: [OllamaMessage]) async throws -> String {
+    
+    
+    func chat(context: [ChatMessage]) async throws -> String {
+        try await chat(context: context.map(OllamaMessage.init))
+    }
+    
+    
+    func chat(context: [OllamaMessage]) async throws -> String {
         let url = URL(string: "\(baseURL)/api/chat")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -34,11 +40,11 @@ actor OllamaClient {
             let stream: Bool
         }
         struct Response: Decodable {
-            struct Msg: Decodable { let content: String }
-            let message: Msg
+            struct Body: Decodable { let content: String }
+            let message: Body
         }
         
-        req.httpBody = try Body(model: model, messages: messages, stream: false).jsonData()
+        req.httpBody = try Body(model: model, messages: context, stream: false).jsonData()
         let (data, _) = try await URLSession.shared.data(for: req)
         return try Response(jsonData: data).message.content
     }
@@ -47,16 +53,14 @@ actor OllamaClient {
 
 
 struct OllamaMessage: Codable, Sendable {
-    let role: Role
+    let role: ChatMessage.Role
     let content: String
 }
 
 
 
 extension OllamaMessage {
-    enum Role: String, Codable, Sendable {
-        case system
-        case assistant
-        case user
+    init(_ chatMessage: ChatMessage) {
+        self.init(role: chatMessage.role, content: chatMessage.contentForLlm)
     }
 }

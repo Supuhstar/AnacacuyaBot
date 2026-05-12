@@ -1,6 +1,24 @@
 {
-  "originHash" : "7d18942de472f24ce546c72bb6040f569daaa09278f8f40c1f815dceb109df26",
+  "originHash" : "4f954be77150872a4f2f368520016ff2e54bd3b3cb5c21798314971bd881ce12",
   "pins" : [
+    {
+      "identity" : "swift-collection-tools",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Collection-Tools.git",
+      "state" : {
+        "revision" : "84330a040a57296eb6a4d0c801294689dab80166",
+        "version" : "3.2.1"
+      }
+    },
+    {
+      "identity" : "swift-function-tools",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Function-Tools.git",
+      "state" : {
+        "revision" : "0cc2083f05dc12fa70451985c0c3390e63b468ed",
+        "version" : "2.0.0"
+      }
+    },
     {
       "identity" : "swift-optional-tools",
       "kind" : "remoteSourceControl",

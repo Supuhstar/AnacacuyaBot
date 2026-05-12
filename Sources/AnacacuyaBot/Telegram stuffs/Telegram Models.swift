@@ -57,7 +57,7 @@ extension TGRepliedToMessage {
 
 
 
-struct TGUser: Decodable, Sendable {
+public struct TGUser: Decodable, Sendable {
     let id: Int64
     let isBot: Bool
     let firstName: String
@@ -69,7 +69,7 @@ struct TGUser: Decodable, Sendable {
 extension TGUser {
     var nameForLlm: String {
         if let username {
-            "\(firstName) (\(username))"
+            "\(firstName) (@\(username))"
         }
         else if firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             "an anonymous user"

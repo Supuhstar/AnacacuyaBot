@@ -12,6 +12,7 @@ let package = Package(
     ],
     
     dependencies: [
+        .package(url: "https://github.com/RougeWare/Swift-Collection-Tools.git", from: "3.2.1"),
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
     ],
     
@@ -21,6 +22,7 @@ let package = Package(
         .executableTarget(
             name: "AnacacuyaBot",
             dependencies: [
+                .product(name: "CollectionTools", package: "Swift-Collection-Tools"),
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
             ],
             swiftSettings: [

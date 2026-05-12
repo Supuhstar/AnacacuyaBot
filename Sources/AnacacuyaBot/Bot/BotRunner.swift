@@ -7,6 +7,8 @@
 
 import Foundation
 
+import CollectionTools
+
 
 
 /// Top-level orchestrator that wires the inbound Telegram event stream,
@@ -72,6 +74,7 @@ extension BotRunner {
             persona: .default,
             commands: [
                 PromptCommand(),
+                DebugShowFullContextCommand(),
             ],
             limiter: BotLimiter(),
             botUsername: username,
@@ -113,7 +116,7 @@ private extension BotRunner {
                 let updates = try await telegram.getUpdates()
                 for update in updates {
                     if let message = update.message {
-                        try await handleMessage(message)
+                        try await handleIncomingMessage(message)
                     }
                 }
             }
@@ -131,66 +134,127 @@ private extension BotRunner {
     }
     
     
-    /// Routes a single inbound message. Dispatch is deliberately simple:
-    /// if the bot was addressed, it replies; otherwise, if this message
-    /// just tripped the count trigger, it interjects; otherwise, silent.
-    /// The two paths are mutually exclusive within a single message —
-    /// a mention plus a count trigger yields one reply, not two
-    /// back-to-back outputs.
-    private func handleMessage(_ userMessage: TGMessage) async throws {
-        guard let text = userMessage.text, false == text.isEmpty else { return }
+    /// Process the given user message.
+    ///
+    /// If it's a command message, then that command is run. Otherwise, it's sent to the LLM to synthesize a response.
+    private func handleIncomingMessage(_ incomingMessage: TGMessage) async throws {
+        guard let wholeUserText = incomingMessage.text?.nonEmptyOrNil else { return }
         
-        let sender = userMessage.from?.username ?? userMessage.from?.firstName ?? "someone"
-        let shouldRespondToMessage = isDirectMessage(userMessage) || isMentioned(userMessage) || isReplyToBot(userMessage)
+        let sender = incomingMessage.from?.nameForLlm ?? "someone"
+        let shouldRespondToMessage = shouldRespond(to: incomingMessage)
         
         print(
             shouldRespondToMessage ? "👀" : " ",
-            "[\(userMessage.chat.title ?? userMessage.chat.username ?? "?")]",
+            "[\(incomingMessage.chat.title ?? incomingMessage.chat.username ?? "?")]",
             "\(sender):",
-            text
+            wholeUserText
         )
         
-        var state = await store.state(for: userMessage.chat)
+        var state = await store.state(for: incomingMessage.chat)
         
-        if let command = commands.first(where: { type(of: $0).matches(text) }) {
-            let commandContext = CommandContext(
-                persona: persona,
-                commandMessage: userMessage,
-                botUser: telegram.botUser,
-            )
+        if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
+            return print("Command result:", commandResult)
+        }
+        
+        await sendLlmMessage(
+            chatState: &state,
+            incomingMessage: ChatMessage(
+                incomingMessage,
+                sender: sender,
+                wholeUserText: wholeUserText,
+            ),
+            shouldRespondToMessage: shouldRespondToMessage,
+            inReplyTo: incomingMessage.replyToMessage,
+        )
+    }
+    
+    
+    /// Attempts to run the given whole user text as a command.
+    ///
+    /// If the given text cannot be parsed as a command, then no command is run and this returns `.none`
+    ///
+    /// - Parameters:
+    ///   - wholeUserText: The raw text straight from the Telegram user sending a message to this bot
+    ///   - userMessage:   The whole message the user sent, including metadata
+    ///   - state:         The state of the chat in which this command would be run
+    ///
+    /// - Returns: The result of running the command, or `.none` if a well-formed command couldn't be parsed out of `wholeUserText`
+    private func runAsCommand(_ wholeUserText: String, incomingMessage: TGMessage, chatState state: inout ChatState) async throws -> CommandRunResult? {
+        if let command = commands.first(where: { type(of: $0).matches(wholeUserText, as: botUser) }),
+           let parsedCommand = type(of: command).parsing(wholeUserText, as: botUser)
+        {
+            let arguments = parsedCommand.body.arguments
             
-            for response in try await command.run(with: text, context: commandContext) {
+            let commandContext = CommandContext(
+                    persona: persona,
+                    commandMessage: incomingMessage,
+                    botUser: telegram.botUser,
+                    fullContextMessageHistory: { [state] purpose in
+                        await contextMessages(
+                            for: purpose,
+                            state: state,
+                            botUser: botUser,
+                            inReplyTo: incomingMessage.replyToMessage
+                        )
+                    },
+                )
+            
+            for response in try await command.run(arguments: arguments, remainingText: wholeUserText, context: commandContext) {
                 switch response {
-                case .text(let response):
-                    try await send(message: response, inChat: userMessage.chat.id, replyingTo: userMessage.id, chatState: &state)
+                case .message(let response):
+                    try await send(message: response, inChat: incomingMessage.chat.id, replyingTo: incomingMessage.id, chatState: &state)
                 }
             }
             
-            return
+            return .suceeded
         }
         
+        return .none
+    }
+    
+    
+    /// Asks the LLM to send a message in response to the incoming Telegram message
+    ///
+    /// - Parameters:
+    ///   - state:                  This tracks the state of the chat. This function will mutate it to register that the given message was received and that the bot responded with its own.
+    ///   - incomingMessage:        The original message from Telegram, like if a user mentions or replies to this bot's message.
+    ///   - shouldRespondToMessage: Whether the bot should respond directly to the incoming message. `false` indicates that the bot will send a standalone message instead.
+    ///   - repliedToMessage:       If there's a specific message that the bot should respond to, put that here
+    private func sendLlmMessage(chatState state: inout ChatState, incomingMessage: ChatMessage, shouldRespondToMessage: Bool, inReplyTo repliedToMessage: TGRepliedToMessage?) async {
         // Uncomment when you're testing in production:
-//        return try await send(message: "😴💤 [I'm in maintenance mode]", inChat: msg.chat.id, replyingTo: msg.messageId, chatState: &state)
+//        try? await send(message: "😴💤 [I'm in maintenance mode]", inChat: state.chat.id, replyingTo: incomingMessage.id, chatState: &state); return
         
         guard await limiter.isStillWithinDailyMessageLimit() else {
             return
         }
         
-        let chatMessage = ChatMessage(senderName: sender, text: text, isBot: false, isReply: nil != userMessage.replyToMessage)
-        let nextStep = await state.register(didReceiveMessage: chatMessage)
+        let nextStep = await state.register(didReceiveMessage: incomingMessage)
         
         if shouldRespondToMessage {
-            await respond(in: userMessage.chat, state: &state, inReplyTo: userMessage.replyToMessage, replyTo: userMessage.id)
+            await respond(inReplyTo: repliedToMessage, state: &state)
         }
         else {
             switch nextStep {
             case .interject:
-                await interject(in: userMessage.chat, inReplyTo: userMessage.replyToMessage, state: &state)
+                await interject(inReplyTo: repliedToMessage, state: &state)
                 
             case .none:
                 break
             }
         }
+    }
+    
+    
+    private func shouldRespond(to incomingMessage: TGMessage) -> Bool {
+        isDirectMessage(incomingMessage)
+        || isMentioned(incomingMessage)
+        || isReplyToBot(incomingMessage)
+    }
+    
+    
+    
+    enum CommandRunResult {
+        case suceeded
     }
 }
 
@@ -199,17 +263,43 @@ private extension BotRunner {
 // MARK: - Sending messages
 
 private extension BotRunner {
-    func send(message: String, inChat chatId: TGChat.ID, replyingTo replyTo: TGMessage.ID?, chatState state: inout ChatState) async throws {
+    
+    func send(
+        message: ChatMessage,
+        inChat chatId: TGChat.ID,
+        replyingTo repliedToMessage: TGMessage.ID?,
+        chatState state: inout ChatState,
+    ) async throws {
+        try await send(
+            message: message.text,
+            inChat: chatId,
+            replyingTo: repliedToMessage,
+            chatState: &state
+        )
+    }
+    
+    
+    func send(
+        message: String,
+        inChat chatId: TGChat.ID,
+        replyingTo repliedToMessage: TGMessage.ID?,
+        chatState state: inout ChatState,
+    ) async throws {
         guard false == message.isEmpty else { return }
         
         await limiter.registerDidSendMessage()
         
-        try await telegram.sendMessage(chatId: chatId, text: message.telegram_escapedForMarkdownV2, replyTo: replyTo)
+        try await telegram.sendMessage(
+            chatId: chatId,
+            text: message.telegram_escapedForMarkdownV2,
+            inReplyTo: repliedToMessage)
+        
         await state.register(didSendMessage: ChatMessage(
+            id: nil,
             senderName: botUsername,
-            text: message,
-            isBot: true,
-            isReply: nil != replyTo)
+            role: .assistant,
+            isReply: nil != repliedToMessage,
+            text: message)
         )
     }
 }
@@ -249,47 +339,68 @@ private extension BotRunner {
         guard let reply = msg.replyToMessage, let from = reply.from else { return false }
         return true == (from.username?.lowercased() == botUsername.lowercased())
     }
+}
+
+
+// MARK: - Generation
+
+internal extension BotRunner {
     
-    
-    
-    // MARK: - Generation
+    /// All message we want to send to the bot, for its context in order to generate its response
+    ///
+    /// - Parameters:
+    ///   - for:              Why is this context being composed?
+    ///   - state:            The current state of the current chat
+    ///   - botUser:          The user account for this bot
+    ///   - repliedToMessage: If this response will be replying to an existing message, specify it here
+    ///
+    /// - Returns: An array of message ready to send to the bot so it can synthesize a reply.
+    func contextMessages(
+        for: BotMessagePurpose,
+        state: ChatState,
+        botUser: TGUser,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+    ) async -> [ChatMessage] {
+        let history = await state.recentMessages
+        return persona.contextMessages(for: .response, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+    }
+}
+
+
+
+private extension BotRunner {
     
     /// Generates and sends a direct response, threading the result back
     /// into chat history so the bot's own utterances participate in
     /// future context.
     private func respond(
-        in chat: TGChat,
-        state: inout ChatState,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-        replyTo: Int? = nil)
-    async {
-        let history = await state.recentMessages
-        let messages = persona.contextMessages(for: .response, in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
-        await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: replyTo)
+        state: inout ChatState,
+    ) async {
+        let context = await contextMessages(for: .response, state: state, botUser: botUser, inReplyTo: repliedToMessage)
+        await sendGeneratedResponse(context: context, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
     }
     
     
     /// Generates and sends an unprompted interjection. Distinguished
     /// from `respond` only by which prompt shape it asks the persona
     /// for — the send-and-record machinery is shared via `generate`.
-    private func interject(in chat: TGChat, inReplyTo repliedToMessage: TGRepliedToMessage?, state: inout ChatState) async {
+    private func interject(inReplyTo repliedToMessage: TGRepliedToMessage?, state: inout ChatState) async {
         let history = await state.recentMessages
         guard false == history.isEmpty else { return }
-        let messages = persona.contextMessages(for: .interjection, in: chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
-        await sendGeneratedReply(messages: messages, chatId: chat.id, state: &state, replyTo: nil)
-        print("💬 Interjected in chat \(chat.id)")
+        
+        let context = persona.contextMessages(for: .interjection, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        await sendGeneratedResponse(context: context, chatId: state.chat.id, state: &state, inReplyTo: nil)
+        print("💬 Interjected in chat \(state.chat.nameForLlm)")
     }
     
     
-    /// Shared completion path: call the model, send the result, record
-    /// the bot's own message in chat history. Generation failures are
-    /// logged and swallowed; a model hiccup shouldn't take down the
-    /// runner — the next event will give it another chance.
-    private func sendGeneratedReply(messages: [OllamaMessage], chatId: Int64, state: inout ChatState, replyTo: Int?) async {
+    /// Tells the LLM to generate a respond to the given context messages, optionally explicitly replying to one.
+    private func sendGeneratedResponse(context: [ChatMessage], chatId: Int64, state: inout ChatState, inReplyTo: Int?) async {
         let reply: String
         
         do {
-            reply = try await ollama.chat(messages: messages)
+            reply = try await ollama.chat(context: context)
         }
         catch {
             print("⚠️ Generation error: \(error)")
@@ -297,7 +408,7 @@ private extension BotRunner {
         }
         
         let recentSenders = await state.recentMessages
-            .filter { false == $0.isBot }
+            .filter { .assistant != $0.role }
             .map(\.senderName)
         let cleaned = persona.sanitize(
             reply,
@@ -306,7 +417,7 @@ private extension BotRunner {
         )
         
         do {
-            try await send(message: cleaned, inChat: chatId, replyingTo: replyTo, chatState: &state)
+            try await send(message: cleaned, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
         }
         catch {
             print("⚠️ Failed to send generated reply: \(error)")
@@ -344,7 +455,7 @@ private extension BotRunner {
             var state = await store.state(for: randomChat)
             guard await state.stillAllowedToInterjectToday() else { continue }
             
-            await interject(in: randomChat, inReplyTo: nil, state: &state)
+            await interject(inReplyTo: nil, state: &state)
         }
     }
     

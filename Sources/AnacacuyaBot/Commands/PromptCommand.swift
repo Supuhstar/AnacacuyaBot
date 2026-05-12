@@ -13,15 +13,17 @@ private let exampleContext = #"<UP TO \#(Limits.contextWindow_messageCount) CHAT
 
 
 
+/// A command which only sends the current system prompts to the current chat
 struct PromptCommand: BotCommand {
+    
     static let name = "prompt"
     
-    static let briefDescription = "Send just the current system prompt"
+    static let briefDescription = "Send just the current system prompts"
     
     static let help: String? = nil
     
     
-    func run(with userInput: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
+    func run(arguments _: [BotCommandArgument], remainingText _: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
         
         func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) -> String {
             let (earlier, later) = context.persona
@@ -35,27 +37,27 @@ struct PromptCommand: BotCommand {
             return """
                 \(earlier)
                 
-                \(exampleContext)
+                ---
                 
                 \(later)
                 """
         }
         
         return [
-            .text("""
+            .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
                 __*When interjecting in a group:*__
                 \(systemPrompt(for: .interjection, in: .group))
-                """),
+                """)),
             
-            .text("""
+                .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
                 __*When replying in a group:*__
                 \(systemPrompt(for: .response, in: .group))
-                """),
+                """)),
             
-            .text("""
+                .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
                 __*When replying in DMs:*__
                 \(systemPrompt(for: .response, in: .private))
-                """),
+                """)),
         ]
     }
 }

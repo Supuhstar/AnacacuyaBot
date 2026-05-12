@@ -22,6 +22,22 @@ struct TGChat: Decodable, Sendable, Identifiable {
 
 extension TGChat {
     
+    /// The name for this chat which would be best to pass to an LLM
+    var nameForLlm: String {
+        switch type {
+        case .channel, .group, .supergroup:
+            groupNameForLlm
+            
+        case .private:
+            dmNameForLlm
+        }
+    }
+}
+
+
+
+private extension TGChat {
+    
     /// The name for this chat, assuming this is a group chat, which would be best to pass to an LLM
     var groupNameForLlm: String {
         title ?? username ?? "a group chat"
