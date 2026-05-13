@@ -115,13 +115,12 @@ private extension BotRunner {
         print("📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
-                try await handleIncomingMessage(.init(messageId: 0, from: nil, chat: TGChat.init(id: 0, type: .supergroup, title: "Demo group", username: "DemoGroup", firstName: "Example", lastName: "Chat"), text: "/debug_fullcontext", replyToMessage: nil, entities: nil))
-//                let updates = try await telegram.getUpdates()
-//                for update in updates {
-//                    if let message = update.message {
-//                        try await handleIncomingMessage(message)
-//                    }
-//                }
+                let updates = try await telegram.getUpdates()
+                for update in updates {
+                    if let message = update.message {
+                        try await handleIncomingMessage(message)
+                    }
+                }
             }
             catch {
                 if let error = error as? TelegramClient.UpdateError {
@@ -160,16 +159,16 @@ private extension BotRunner {
             return print("Command result:", commandResult)
         }
         
-//        await sendLlmMessage(
-//            chatState: &state,
-//            incomingMessage: ChatMessage(
-//                incomingMessage,
-//                sender: sender,
-//                wholeUserText: wholeUserText,
-//            ),
-//            shouldRespondToMessage: shouldRespondToMessage,
-//            inReplyTo: incomingMessage.replyToMessage,
-//        )
+        await sendLlmMessage(
+            chatState: &state,
+            incomingMessage: ChatMessage(
+                incomingMessage,
+                sender: sender,
+                wholeUserText: wholeUserText,
+            ),
+            shouldRespondToMessage: shouldRespondToMessage,
+            inReplyTo: incomingMessage.replyToMessage,
+        )
     }
     
     
