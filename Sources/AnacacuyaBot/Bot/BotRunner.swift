@@ -167,7 +167,7 @@ private extension BotRunner {
                 wholeUserText: wholeUserText,
             ),
             shouldRespondToMessage: shouldRespondToMessage,
-            inReplyTo: incomingMessage.replyToMessage,
+            inReplyTo: .init(incomingMessage),
         )
     }
     

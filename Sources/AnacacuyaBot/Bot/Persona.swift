@@ -189,7 +189,7 @@ private extension Persona {
         return """
             \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
             Whatever you say next will be the ENTIRE body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
-            You NEVER speak as if you're someone else in the chat.
+            You NEVER speak as if you're someone else in the chat. You NEVER say your own username unless explicitly asked too.
             You're allowed to use MarkdownV2.
             """
     }
