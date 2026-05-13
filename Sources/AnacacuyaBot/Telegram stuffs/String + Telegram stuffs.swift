@@ -15,7 +15,7 @@ public extension String {
     ///
     /// Because if you don't escape it, they'll just reject it with a 400 error.
     var telegram_escapedToInsertAsPlaintextIntoMarkdownV2: String {
-        self.replacing(/[_*\[\]()~`>#+=|{}.!-]/) { "\\\($0.output)" }
+        self.replacing(/[\\_*\[\]()~`>#+=|{}.!-]/) { "\\\($0.output)" }
     }
     
     
