@@ -156,7 +156,12 @@ private extension BotRunner {
         
         
         if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
-            return print("Command result:", commandResult)
+            print("Command result:", commandResult)
+            
+            switch commandResult {
+            case .consumedTurn:
+                return
+            }
         }
         
         await sendLlmMessage(
@@ -210,7 +215,7 @@ private extension BotRunner {
                 }
             }
             
-            return .succeeded
+            return .consumedTurn
         }
         
         return .none
@@ -258,7 +263,7 @@ private extension BotRunner {
     
     
     enum CommandRunResult {
-        case succeeded
+        case consumedTurn
     }
 }
 
