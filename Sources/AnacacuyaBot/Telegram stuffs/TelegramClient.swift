@@ -125,11 +125,17 @@ private let noResponseRegex = Regex {
 private func bracketed(_ opening: Character, _ body: String, _ closing: Character) -> Regex<(Substring, Substring)> {
     Regex {
         Capture {
-            "["
+            ChoiceOf {
+                opening
+                "\\\(opening)"
+            }
             ZeroOrMore(.whitespace)
             body
             ZeroOrMore(.whitespace)
-            "]"
+            ChoiceOf {
+                closing
+                "\\\(closing)"
+            }
         }
     }
 }

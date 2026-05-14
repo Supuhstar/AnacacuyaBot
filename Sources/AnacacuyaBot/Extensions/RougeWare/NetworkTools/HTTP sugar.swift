@@ -48,7 +48,13 @@ extension Encodable {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = timeout.timeInterval
         req.httpBody = try jsonData()
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, urlResponse) = try await URLSession.shared.data(for: req)
+        
+        if let statusCode = (urlResponse as? HTTPURLResponse)?.statusCode,
+           statusCode != 200 {
+            print("⚠️ Error \(statusCode) response:", String(data: data, encoding: .utf8) ?? "(could not decode response)")
+        }
+        
         return data
     }
     
