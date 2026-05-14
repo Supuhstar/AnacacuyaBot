@@ -158,11 +158,10 @@ struct MarkdownV2EscapingTests {
         
         // MARK: Specials inside vs. around spans
         
-        @Test("Specials inside a span are not escaped (span is atomic)")
-        func specialsInsideSpan() {
-            // Telegram's parser is lenient about specials inside formatting spans;
-            // the function preserves them verbatim rather than fighting that.
-            #expect("*a.b*" == "*a.b*".telegram_escapedForMarkdownV2)
+        @Test("Specials inside a formatting span are escaped per Telegram rule 4")
+        func specialsInsideFormattingSpan() {
+            #expect("*a\\.b*" == "*a.b*".telegram_escapedForMarkdownV2)
+            #expect("_word\\-word_" == "_word-word_".telegram_escapedForMarkdownV2)
         }
         
         @Test("Specials around a span are escaped while the span stays intact")

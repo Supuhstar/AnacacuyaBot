@@ -1,5 +1,5 @@
 {
-  "originHash" : "4f954be77150872a4f2f368520016ff2e54bd3b3cb5c21798314971bd881ce12",
+  "originHash" : "9b49699fd960e76f6c6770f3471195ad41ab804c622667aae5248a06ad5e4f90",
   "pins" : [
     {
       "identity" : "swift-collection-tools",
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "4d151e1513b04da2ddc9fe464352e4070f7d992f",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-special-string",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Special-String",
+      "state" : {
+        "revision" : "7a82d5b07b72aed848b028d3e8bf6d9591ec108a",
+        "version" : "1.2.0"
       }
     }
   ],

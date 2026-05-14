@@ -17,7 +17,7 @@ extension Persona {
         pronouns: "they/them",
         fursona: "a gryphon",
         
-        modelSettings: .init(num_predict: 100),
+        modelSettings: .init(num_predict: 1000),
         
         directResponseSystemPrompt: """
             Keep your reply to 1~3 sentences at MOST.
@@ -80,10 +80,13 @@ struct Persona: Sendable {
     ///
     /// - Returns: The messages that you can send to Ollama to give the model all the context it needs for a response to those messages. This includes the given historical messages, as well as system prompts as needed.
     func contextMessages(for purpose: BotMessagePurpose, in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [ChatMessage] {
-        let (earlier, later) = systemPrompt(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+        let (earlier, later, tail) = systemPrompt(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
         return [earlier]
             + history
-            + [later]
+            + [
+                later,
+                tail,
+            ]
     }
 }
 
@@ -105,11 +108,12 @@ extension Persona {
         in chat: TGChat,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) -> (earlier: ChatMessage, later: ChatMessage) {
-        let (earlier, later) = systemPromptStrings(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+    ) -> PiecewiseSystemPrompt<ChatMessage> {
+        let (earlier, later, tail) = systemPromptStrings(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
         return (
             earlier: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: earlier),
-            later: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: later)
+            later: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: later),
+            tail: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: tail),
         )
     }
     
@@ -119,7 +123,7 @@ extension Persona {
         in chat: TGChat,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) -> (earlier: String, later: String) {
+    ) -> PiecewiseSystemPrompt<String> {
         let promptPrefix = switch chat.type {
             case .private:
                 "You're sending a DM to \(chat.username ?? "a user")."
@@ -129,13 +133,11 @@ extension Persona {
                 case .interjection:
                     """
                     You're talking in \(chat.title ?? chat.username ?? "a group chat").
-                    If you respond to more than one person, you MUST use their @handle, NEVER just use their username.
                     """
                     
                 case .response:
                     """
                     You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat").
-                    If you respond to more than one person, you MUST use their @handle, NEVER just use their username.
                     """
                 }
                 
@@ -161,11 +163,42 @@ extension Persona {
                 directResponseSystemPrompt
             }
         
+        
+        var creatorNameContext: String? {
+            if let creator = UnixEnvironment[.creatorUsername] {
+                """
+                You were created by @\(creator) — this is who made your software.
+                """
+            }
+            else {
+                nil
+            }
+        }
+        
+        
+        var tailSystemPromptText: String {
+            var additionalSystemPrompt = ""
+            if let creatorNameContext = creatorNameContext {
+                additionalSystemPrompt = creatorNameContext
+            }
+            additionalSystemPrompt += """
+                
+                If you don't want to say anything at all, just send "\(noResponseGeneratedString)".
+                """
+            
+            return additionalSystemPrompt
+        }
+        
+        
         return (
             earlier: generalPrompt,
             later: specificPrompt,
+            tail: tailSystemPromptText,
         )
     }
+    
+    
+    typealias PiecewiseSystemPrompt<Piece> = (earlier: Piece, later: Piece, tail: Piece)
 }
 
 
@@ -193,8 +226,7 @@ private extension Persona {
         
         return """
             \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
-            Whatever you say next will be the ENTIRE body of a message. Reply with ONLY your message text, NEVER prefixed, NEVER boilerplate.
-            You NEVER speak as if you're someone else in the chat. You NEVER say your own username unless explicitly asked too.
+            Whatever you say next will be the ENTIRE body of a message. Reply with ONLY YOUR message text. Remember who you are.
             You're allowed to use MarkdownV2.
             """
     }

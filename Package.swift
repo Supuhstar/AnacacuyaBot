@@ -14,6 +14,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/RougeWare/Swift-Collection-Tools.git", from: "3.2.1"),
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
+        .package(url: "https://github.com/RougeWare/Swift-Special-String", from: "1.2.0"),
     ],
     
     targets: [
@@ -24,6 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "CollectionTools", package: "Swift-Collection-Tools"),
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
+                .product(name: "SpecialString", package: "Swift-Special-String"),
             ],
             swiftSettings: [
                 .strictMemorySafety(),

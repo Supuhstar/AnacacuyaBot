@@ -18,9 +18,9 @@ actor OllamaClient {
     let model: String
     
     
-    init(baseURL: String = "http://localhost:11434", model: String = "smollm2") {
+    init(baseURL: URL, model: String) {
         self.model = model
-        self.chatUrl = URL(string: "\(baseURL)/api/chat")!
+        self.chatUrl = baseURL.appending(path: "api/chat") //URL(string: "\(baseURL)/api/chat")!
     }
     
     

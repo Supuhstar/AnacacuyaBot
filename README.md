@@ -17,6 +17,7 @@ This will talk in DMs, respond to any mentions/replies to it, and randomly send 
     export TELEGRAM_BOT_TOKEN="hrgailrhjfirnnenmocuesznclizejjsnfzdls"
     export OLLAMA_MODEL="smollm2" # optional, this is the default
     export OLLAMA_BASE_URL="http://localhost:11434" # optional, this is the default 
+    export CREATOR_USERNAME="KyNorthstar" # optional, your Telegram username. Omitted by default.
     ```
 
 5. Set up Ollama integration

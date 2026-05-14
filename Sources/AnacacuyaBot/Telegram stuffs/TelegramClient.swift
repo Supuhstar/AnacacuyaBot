@@ -9,6 +9,7 @@ import Foundation
 #if os(Linux) || os(Windows)
 import FoundationNetworking
 #endif
+import RegexBuilder
 
 import SerializationTools
 
@@ -20,15 +21,13 @@ private let keyEncodingStrategy = JSONEncoder.KeyEncodingStrategy.convertToSnake
 
 
 actor TelegramClient {
-    private let token: String
     private let base: String
     private var offset: Int = 0
     public let botUser: TGUser
     
     
-    init(token: String) async throws {
-        self.token = token
-        let base = "https://api.telegram.org/bot\(token)"
+    init(token: TelegramBotToken) async throws {
+        let base = "https://api.telegram.org/bot\(token.withoutTypeSafety())"
         self.base = base
         
         self.botUser = try await {
@@ -63,6 +62,13 @@ actor TelegramClient {
     
     
     func sendMessage(chatId: Int64, text: String, inReplyTo: Int? = nil) async throws {
+        guard text.isNotEmpty
+              || (text.matches(noResponseRegex))
+        else {
+            print("🙊 (chose to say nothing)")
+            return
+        }
+        
         print("🗣️\(nil == inReplyTo ? "🤖" : "👩🏽‍💻"):", text)
         let url = URL(string: "\(base)/sendMessage")!
         var req = URLRequest(url: url)
@@ -89,6 +95,41 @@ actor TelegramClient {
             switch self {
             case .unexpectedUpdate(let data): return "Unexpected update: \(String(data: data, encoding: .utf8) ?? "<COULD NOT DECODE>")"
             }
+        }
+    }
+}
+
+
+
+//unsafe: Unsure if there's a better way to do this. Pretty sure `Regex` is safe to be nonisolated anyway.
+@safe
+nonisolated(unsafe)
+private let noResponseRegex = Regex {
+        Anchor.startOfSubject
+        ChoiceOf {
+            bracketed("[", noResponseGeneratedString, "]")
+            bracketed("{", noResponseGeneratedString, "}")
+            bracketed("(", noResponseGeneratedString, ")")
+        }
+        ZeroOrMore(.whitespace)
+        Optionally {
+            "."
+        }
+        ZeroOrMore(.whitespace)
+        Anchor.endOfSubject
+    }
+    .ignoresCase()
+
+
+
+private func bracketed(_ opening: Character, _ body: String, _ closing: Character) -> Regex<(Substring, Substring)> {
+    Regex {
+        Capture {
+            "["
+            ZeroOrMore(.whitespace)
+            body
+            ZeroOrMore(.whitespace)
+            "]"
         }
     }
 }

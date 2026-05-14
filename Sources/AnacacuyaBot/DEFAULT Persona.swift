@@ -18,6 +18,8 @@ extension Persona {
 
 
 extension Persona {
+    
+    /// The persona used for internal testing
     static let demoPersona = Persona(
         name: "Testificate",
         pronouns: "it/its",
@@ -29,4 +31,8 @@ extension Persona {
         interjectionSystemPrompt: """
             You are a demo Telegram bot. Say something unrelated to this conversation.
             """)
+    
+    
+    /// The non-persona (defer to the Ollama modelfile)
+    static let none = Persona(directResponseSystemPrompt: "", interjectionSystemPrompt: "")
 }

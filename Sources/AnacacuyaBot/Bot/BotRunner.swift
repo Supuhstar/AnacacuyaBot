@@ -52,14 +52,14 @@ extension BotRunner {
     /// the `getMe` round-trip up front to cache the username and to
     /// surface auth errors immediately rather than at first traffic.
     static func start() async throws -> BotRunner {
-        guard let token = ProcessInfo.processInfo.environment["TELEGRAM_BOT_TOKEN"],
-              false == token.isEmpty
+        guard let token = UnixEnvironment[.telegramBotToken],
+              token.withoutTypeSafety().isNotEmpty
         else {
             throw BotError.missingToken
         }
         
-        let model = ProcessInfo.processInfo.environment["OLLAMA_MODEL"] ?? "smollm2"
-        let ollamaURL = ProcessInfo.processInfo.environment["OLLAMA_BASE_URL"] ?? "http://localhost:11434"
+        let model = UnixEnvironment[.llmName]
+        let ollamaURL = UnixEnvironment[.ollamaBaseUrl]
         
         let telegram = try await TelegramClient(token: token)
         let me = telegram.botUser
@@ -416,7 +416,14 @@ private extension BotRunner {
         state: inout ChatState,
     ) async {
         let (context, settings) = await contextMessages(for: .interjection, state: state, botUser: botUser, inReplyTo: repliedToMessage)
-        await sendGeneratedResponse(context: context, settings: settings, chatId: state.chat.id, state: &state, inReplyTo: nil)
+        
+        
+        await sendGeneratedResponse(
+            context: context,
+            settings: settings,
+            chatId: state.chat.id,
+            state: &state,
+            inReplyTo: nil)
     }
     
     
