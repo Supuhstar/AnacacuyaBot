@@ -17,6 +17,8 @@ extension Persona {
         pronouns: "they/them",
         fursona: "a gryphon",
         
+        modelSettings: .init(num_predict: 100),
+        
         directResponseSystemPrompt: """
             Keep your reply to 1~3 sentences at MOST.
             These people are your friends, and you genuinely treat them that way.
@@ -53,6 +55,9 @@ struct Persona: Sendable {
     var name: String? = nil
     var pronouns: String? = nil
     var fursona: String? = nil
+    
+    /// The low-level settings for the model that'll be running the persona
+    var modelSettings: ModelSettings? = nil
     
     /// System prompt for direct responses. Sets the voice for replies
     /// that participate in turn-taking dialogue.

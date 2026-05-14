@@ -199,6 +199,7 @@ private extension BotRunner {
                             botUser: botUser,
                             inReplyTo: incomingMessage.replyToMessage
                         )
+                        .context
                     },
                 )
             
@@ -378,9 +379,11 @@ internal extension BotRunner {
         state: ChatState,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) async -> [ChatMessage] {
+    ) async -> (context: [ChatMessage], settings: ModelSettings?) {
         let history = await state.recentMessages
-        return persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        let context = persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        let settings = persona.modelSettings
+        return (context: context, settings: settings)
     }
 }
 
@@ -395,30 +398,35 @@ private extension BotRunner {
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         state: inout ChatState,
     ) async {
-        let context = await contextMessages(for: .response, state: state, botUser: botUser, inReplyTo: repliedToMessage)
-        await sendGeneratedResponse(context: context, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
+        let (context, settings) = await contextMessages(for: .response, state: state, botUser: botUser, inReplyTo: repliedToMessage)
+        await sendGeneratedResponse(context: context, settings: settings, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
     }
     
     
     /// Generates and sends an unprompted interjection. Distinguished
     /// from `respond` only by which prompt shape it asks the persona
     /// for — the send-and-record machinery is shared via `generate`.
-    private func interject(inReplyTo repliedToMessage: TGRepliedToMessage?, state: inout ChatState) async {
-        let history = await state.recentMessages
-        guard false == history.isEmpty else { return }
-        
-        let context = persona.contextMessages(for: .interjection, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
-        await sendGeneratedResponse(context: context, chatId: state.chat.id, state: &state, inReplyTo: nil)
-        print("💬 Interjected in chat \(state.chat.nameForLlm)")
+    private func interject(
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+        state: inout ChatState,
+    ) async {
+        let (context, settings) = await contextMessages(for: .interjection, state: state, botUser: botUser, inReplyTo: repliedToMessage)
+        await sendGeneratedResponse(context: context, settings: settings, chatId: state.chat.id, state: &state, inReplyTo: nil)
     }
     
     
     /// Tells the LLM to generate a respond to the given context messages, optionally explicitly replying to one.
-    private func sendGeneratedResponse(context: [ChatMessage], chatId: Int64, state: inout ChatState, inReplyTo: Int?) async {
+    private func sendGeneratedResponse(
+        context: [ChatMessage],
+        settings: ModelSettings?,
+        chatId: Int64,
+        state: inout ChatState,
+        inReplyTo: Int?,
+    ) async {
         let reply: String
         
         do {
-            reply = try await ollama.chat(context: context)
+            reply = try await ollama.chat(context: context, settings: settings)
         }
         catch {
             print("⚠️ Generation error: \(error)")

@@ -16,30 +16,26 @@ actor OllamaClient {
     private let chatUrl: URL
     private let mutex = Mutex()
     let model: String
-
+    
+    
     init(baseURL: String = "http://localhost:11434", model: String = "smollm2") {
         self.model = model
         self.chatUrl = URL(string: "\(baseURL)/api/chat")!
     }
     
     
-    nonisolated func chat(context: [ChatMessage]) async throws -> String {
-        try await chat(context: context.map(OllamaMessage.init))
+    nonisolated func chat(context: [ChatMessage], settings: ModelSettings?) async throws -> String {
+        try await chat(context: context.map(OllamaMessage.init),
+                       settings: settings)
     }
     
     
-    nonisolated func chat(context: [OllamaMessage]) async throws -> String {
+    nonisolated func chat(context: [OllamaMessage], settings: ModelSettings?) async throws -> String {
         try await mutex.run {
-            var req = URLRequest(url: chatUrl)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.timeoutInterval = Limits.maxTimeToWaitForModelResponse.timeInterval
-            
-            
-            
             struct Body: Encodable {
                 let model: String
                 let messages: [OllamaMessage]
+                let options: ModelSettings?
                 let stream: Bool
             }
             
@@ -57,9 +53,15 @@ actor OllamaClient {
             
             
             
-            req.httpBody = try Body(model: model, messages: context, stream: false).jsonData()
-            let (data, _) = try await URLSession.shared.data(for: req)
-            return try Response(jsonData: data).message.content
+            return try await Body(
+                    model: model,
+                    messages: context,
+                    options: settings,
+                    stream: false,
+                )
+                .post(to: chatUrl, receiving: Response.self)
+                .message
+                .content
         }
     }
 }
