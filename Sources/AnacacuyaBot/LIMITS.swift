@@ -15,7 +15,8 @@ extension Limits {
     
     // MARK: Total interactions
     
-    static let maxTotalMessagesSentPerDay = 2000
+    static let maxTotalMessagesSentPerDay = 200
+    
     
     // MARK: Autonomous interactions
     
@@ -23,6 +24,11 @@ extension Limits {
     
     static let minMessagesBeforeAutonomousMessageAllowed = 8
     static let maxMessagesBeforeAutonomousMessageGuaranteed = 100
+    
+    
+    // MARK: Temporal limits
+    
+    static let oldestMessageToRespondTo: Duration = .hours(0.5)
 }
 
 

@@ -117,7 +117,9 @@ private extension BotRunner {
             do {
                 let updates = try await telegram.getUpdates()
                 for update in updates {
-                    if let message = update.message {
+                    if let message = update.message,
+                       message.sentDate.isSooner(than: Limits.maxTimeToWaitForModelResponse)
+                    {
                         try await handleIncomingMessage(message)
                     }
                 }
