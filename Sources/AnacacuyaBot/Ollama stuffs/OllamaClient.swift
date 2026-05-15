@@ -55,7 +55,7 @@ actor OllamaClient {
             
             return try await Body(
                     model: model,
-                    messages: context,
+                    messages: context.reversed().withoutDuplicates().reversed(),
                     options: settings,
                     stream: false,
                 )
@@ -68,7 +68,7 @@ actor OllamaClient {
 
 
 
-struct OllamaMessage: Codable, Sendable {
+struct OllamaMessage: Codable, Sendable, Equatable {
     let role: ChatMessage.Role
     let content: String
 }
