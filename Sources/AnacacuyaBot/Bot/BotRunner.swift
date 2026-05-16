@@ -29,7 +29,7 @@ import CollectionTools
 /// re-querying against a quiet server.
 struct BotRunner: Sendable {
     let telegram: TelegramClient
-    let ollama: OllamaClient
+    let ollama: Ollama
     let store: ChatStateStore
     let persona: Persona
     let commands: [any BotCommand]
@@ -71,7 +71,7 @@ extension BotRunner {
         
         return BotRunner(
             telegram: telegram,
-            ollama: OllamaClient(baseURL: ollamaURL, model: model),
+            ollama: Ollama(baseURL: ollamaURL, model: model),
             store: ChatStateStore(),
             persona: .default,
             commands: [
