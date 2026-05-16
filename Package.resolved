@@ -1,5 +1,5 @@
 {
-  "originHash" : "9b49699fd960e76f6c6770f3471195ad41ab804c622667aae5248a06ad5e4f90",
+  "originHash" : "3f1b4ba9f3f68544fda71aa7172e628ef3ab5bb5f10f93c116efb6fdb5c4130a",
   "pins" : [
     {
       "identity" : "swift-collection-tools",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "b02158c4563570293cccb9dbe606f066b1b69bf2",
         "version" : "1.2.0"
+      }
+    },
+    {
+      "identity" : "swift-semver",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-SemVer.git",
+      "state" : {
+        "revision" : "087d41c30c38237179e70178ce93895cd7ff0886",
+        "version" : "2.0.0"
       }
     },
     {
