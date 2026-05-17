@@ -60,15 +60,3 @@ extension OllamaListModelsResponse.Model {
         let quantizationLevels: String?
     }
 }
-
-
-
-public struct OllamaModelDetailsResponse: OllamaResponse {
-    let parameters: String?
-    let license: String?
-    let modifiedAt: Date??
-    let details: OllamaListModelsResponse.Model.Details?
-    let template: String?
-    let capabilities: [ModelCapability]?
-    let modelInfo: JsonValue?
-}

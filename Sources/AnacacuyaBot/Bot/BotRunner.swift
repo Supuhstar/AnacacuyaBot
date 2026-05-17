@@ -30,6 +30,7 @@ import CollectionTools
 struct BotRunner: Sendable {
     let telegram: TelegramClient
     let ollama: Ollama
+    let models: (llm: OllamaModel, vision: OllamaModel?)
     let store: ChatStateStore
     let persona: Persona
     let commands: [any BotCommand]
@@ -58,20 +59,35 @@ extension BotRunner {
             throw BotError.missingToken
         }
         
-        let model = UnixEnvironment[.llmName]
-        let ollamaUrl = UnixEnvironment[.ollamaBaseUrl]
-        
         let telegram = try await TelegramClient(token: token)
         let me = telegram.botUser
         guard let username = me.username else {
             throw BotError.noUsername
         }
         
-        print("🤖 Logged in as @\(username) | model: \(model)")
+        let ollamaUrl = UnixEnvironment[.ollamaBaseUrl]
+        let ollama = Ollama(baseUrl: ollamaUrl)
+        
+        let llmModelName = UnixEnvironment[.llmName]
+        let visionModelName = UnixEnvironment[.visionModelName]
+        
+        guard let llmModel = try await ollama.model(named: llmModelName) else {
+            throw BotError.failedToLoadLlm
+        }
+        
+        let visionModel: OllamaModel? = if let visionModelName = visionModelName?.nonEmptyOrNil {
+                try await ollama.model(named: visionModelName)
+            }
+            else {
+                nil
+            }
+        
+        print("🤖 Logged in as @\(username) | llm: \(llmModel)")
         
         return BotRunner(
             telegram: telegram,
-            ollama: Ollama(baseUrl: ollamaUrl),
+            ollama: ollama,
+            models: (llm: llmModel, vision: visionModel),
             store: ChatStateStore(),
             persona: .default,
             commands: [
@@ -440,7 +456,7 @@ private extension BotRunner {
         let reply: String
         
         do {
-            reply = try await ollama.chat(context: context, settings: settings)
+            reply = try await ollama.chat(with: models.llm, context: context, settings: settings)
         }
         catch {
             print("⚠️ Generation error: \(error)")
@@ -509,6 +525,7 @@ private extension BotRunner {
     enum BotError: Error {
         case missingToken
         case noUsername
+        case failedToLoadLlm
     }
 }
 
