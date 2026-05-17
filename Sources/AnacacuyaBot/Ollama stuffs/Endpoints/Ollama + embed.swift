@@ -13,7 +13,7 @@ public extension Ollama {
         truncate: Bool? = nil,
         dimensions: Int? = nil,
         keepAlive: Duration? = nil,
-        options: ModelSettings? = nil,
+        options: OllamaModelOptions? = nil,
     ) async throws -> OllamaEmbedResponse {
         // ...
     }

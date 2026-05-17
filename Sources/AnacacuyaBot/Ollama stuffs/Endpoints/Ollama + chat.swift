@@ -14,7 +14,7 @@ public extension Ollama {
         model: OllamaModel,
         messages: [OllamaMessage],
         tools: [OllamaTool]? = nil,
-        options: ModelSettings? = nil,
+        options: OllamaModelOptions? = nil,
         think: OllamaThinking? = nil,
         keepAlive: Duration? = nil,
         logProbabilities: Bool? = nil,
@@ -43,7 +43,7 @@ private struct Body: Encodable {
     let model: String
     let messages: [OllamaMessage]
     let tools: [OllamaTool]?
-    let options: ModelSettings?
+    let options: OllamaModelOptions?
     let stream = false
     let think: OllamaThinking?
     let keepAlive: Duration?
@@ -58,7 +58,7 @@ public extension Ollama {
     func chat(
         with model: OllamaModel,
         context: [ChatMessage],
-        settings: ModelSettings?,
+        settings: OllamaModelOptions?,
     ) async throws -> String {
         try await chat(
             with: model,
@@ -71,12 +71,12 @@ public extension Ollama {
     func chat(
         with model: OllamaModel,
         context: [OllamaMessage],
-        settings: ModelSettings?,
+        settings: OllamaModelOptions?,
     ) async throws -> String {
         struct Body: Encodable {
             let model: String
             let messages: [OllamaMessage]
-            let options: ModelSettings?
+            let options: OllamaModelOptions?
             let stream: Bool
         }
         

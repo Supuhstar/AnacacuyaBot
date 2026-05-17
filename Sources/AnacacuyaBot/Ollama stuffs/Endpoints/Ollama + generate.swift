@@ -21,7 +21,7 @@ public extension Ollama {
         think: OllamaThinking? = nil,
         raw: Bool? = nil,
         keepAlive: Duration? = nil,
-        option: ModelSettings? = nil,
+        option: OllamaModelOptions? = nil,
         logProbabilities: Bool? = nil,
         top_logProbabilities: Int? = nil,
     ) async throws -> OllamaGenerateResponse {

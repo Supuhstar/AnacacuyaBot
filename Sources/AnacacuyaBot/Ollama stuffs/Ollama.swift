@@ -47,7 +47,7 @@ internal extension Ollama {
     ///                   For example, `https://localhost:11434/api/chat` has the endpoint name `"chat"`
     ///   - body:         The object to POST in JSON form
     ///
-    /// - Returns: <#description#>
+    /// - Returns: The parsed JSON response from the server
     func post<Body: OllamaRequest, Response: OllamaResponse>(
         to endpointName: String,
         _ body: Body,

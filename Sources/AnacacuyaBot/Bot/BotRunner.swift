@@ -59,7 +59,7 @@ extension BotRunner {
         }
         
         let model = UnixEnvironment[.llmName]
-        let ollamaURL = UnixEnvironment[.ollamaBaseUrl]
+        let ollamaUrl = UnixEnvironment[.ollamaBaseUrl]
         
         let telegram = try await TelegramClient(token: token)
         let me = telegram.botUser
@@ -71,7 +71,7 @@ extension BotRunner {
         
         return BotRunner(
             telegram: telegram,
-            ollama: Ollama(baseURL: ollamaURL, model: model),
+            ollama: Ollama(baseUrl: ollamaUrl),
             store: ChatStateStore(),
             persona: .default,
             commands: [
@@ -386,7 +386,7 @@ internal extension BotRunner {
         state: ChatState,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) async -> (context: [ChatMessage], settings: ModelSettings?) {
+    ) async -> (context: [ChatMessage], settings: OllamaModelOptions?) {
         let history = await state.recentMessages
         let context = persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
         let settings = persona.modelSettings
@@ -432,7 +432,7 @@ private extension BotRunner {
     /// Tells the LLM to generate a respond to the given context messages, optionally explicitly replying to one.
     private func sendGeneratedResponse(
         context: [ChatMessage],
-        settings: ModelSettings?,
+        settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
         inReplyTo: Int?,

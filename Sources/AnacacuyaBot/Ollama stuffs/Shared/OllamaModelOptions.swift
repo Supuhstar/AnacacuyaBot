@@ -1,5 +1,5 @@
 //
-//  ModelSettings.swift
+//  OllamaModelOptions.swift
 //  AnacacuyaBot
 //
 //  Created by Ky on 2026-05-14.
@@ -9,7 +9,7 @@ import Foundation
 
 
 
-public struct ModelSettings {
+public struct OllamaModelOptions {
     
     /// Random seed used for reproducible outputs
     let seed: Int?
@@ -61,6 +61,6 @@ public struct ModelSettings {
 
 // MARK: - Conformances
 
-extension ModelSettings: Codable {}
-extension ModelSettings: Equatable {}
-extension ModelSettings: Sendable {}
+extension OllamaModelOptions: Codable {}
+extension OllamaModelOptions: Equatable {}
+extension OllamaModelOptions: Sendable {}

@@ -58,7 +58,7 @@ struct Persona: Sendable {
     var fursona: String? = nil
     
     /// The low-level settings for the model that'll be running the persona
-    var modelSettings: ModelSettings? = nil
+    var modelSettings: OllamaModelOptions? = nil
     
     /// System prompt for direct responses. Sets the voice for replies
     /// that participate in turn-taking dialogue.

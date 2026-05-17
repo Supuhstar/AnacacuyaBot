@@ -1,5 +1,5 @@
 //
-//  Environment.swift
+//  UnixEnvironment.swift
 //  AnacacuyaBot
 //
 //  Created by Ky on 2026-05-14.
@@ -48,6 +48,8 @@ extension UnixEnvironment {
 
 
 
+// MARK: - Typed Keys
+
 /// A key to an environment value that this bot reads as needed
 struct UnixEnvironmentKey<Value: Sendable, Backup: Sendable>: Sendable {
     
@@ -85,6 +87,8 @@ extension UnixEnvironmentKey where Backup == Never {
 
 
 
+// MARK: Strings
+
 extension UnixEnvironmentKey where Value: LosslessStringConvertible {
     
     init(_ key: String) where Backup == Never {
@@ -117,19 +121,6 @@ where Value: LosslessStringConvertible,
 
 
 
-extension UnixEnvironmentKey
-where Value == TelegramBotToken,
-      Backup == Never
-{
-    
-    /// The bot's login token from Telegram.
-    ///
-    /// You obtain this from [@BotFather](https://t.me/BotFather) on Telegram
-    static let telegramBotToken: Self = "TELEGRAM_BOT_TOKEN"
-}
-
-
-
 extension UnixEnvironmentKey where Value == String?, Backup == String {
     
     init(_ key: String, backup: @autoclosure @escaping BackupGeneratorFunction) {
@@ -139,39 +130,15 @@ extension UnixEnvironmentKey where Value == String?, Backup == String {
             backup: backup(),
         )
     }
-    
-    
-    /// The name of the LLM model that the bot uses, like `"smollm2"`
-    static let llmName = Self("OLLAMA_MODEL", backup: "smollm2")
 }
 
 
 
-extension UnixEnvironmentKey where Value == String, Backup == Never {
-    
-    /// Your Telegram username, so the bot knows whether it's talking to its creator, like `"KyNorthstar"`
-    static let creatorUsername: Self = "CREATOR_USERNAME"
-}
-
-
-
-// MARK: - URLs
-
-private let defaultOllamaBaseUrl = URL(string: "http://localhost:11434")!
-
-
+// MARK: URLs
 
 extension UnixEnvironmentKey where Value == URL?, Backup == URL {
     
     init(_ key: String, backup: @autoclosure @escaping BackupGeneratorFunction) {
         self.init(key, parse: URL.init(string:), backup: backup())
     }
-    
-    
-    /// The base URL for the Ollama API, like `"http://localhost:11434"`
-    static let ollamaBaseUrl = Self(
-        "OLLAMA_BASE_URL",
-        parse: URL.init(string:),
-        backup: defaultOllamaBaseUrl,
-    )
 }
