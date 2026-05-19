@@ -18,7 +18,7 @@ public extension Ollama {
     ///
     /// A malformed version string causes an error to be thrown; there's no graceful degradation for "we can't tell what we're talking to."
     var version: SemVer {
-        get async throws(VerisonError) {
+        get async throws(VersionError) {
             let response: OllamaVersionResponse
             do {
                 response = try await get(from: "version")
@@ -38,7 +38,7 @@ public extension Ollama {
     
     
     /// Thrown when there's an error attempting to get the Ollama version
-    enum VerisonError: LocalizedError {
+    enum VersionError: LocalizedError {
         
         /// An error occurred while trying to get the version at all
         case networkError(Error)

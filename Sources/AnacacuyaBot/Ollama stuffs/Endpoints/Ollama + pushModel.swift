@@ -37,7 +37,7 @@ private struct OllamaPushModelRequest: OllamaRequest {
     let model: ModelName
     
     /// Allow publishing over insecure connections
-    let insecute = false
+    let insecure = false
     
     /// Stream progress updates
     let stream = false
