@@ -484,8 +484,10 @@ private extension BotRunner {
     /// directly. Using Character offsets on UTF-16 counts silently shifts
     /// mentions past any emoji or non-BMP character earlier in the message.
     private func isMentioned(_ msg: TGMessage) -> Bool {
-        guard let text = msg.text else { return false }
+        guard let text = msg.allUserStrings else { return false }
         if text.localizedCaseInsensitiveContains("@\(botUsername)") { return true }
+        
+        
         
         guard let entities = msg.entities else { return false }
         let utf16 = text.utf16

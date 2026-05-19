@@ -7,6 +7,8 @@
 
 import Foundation
 
+import CollectionTools
+
 
 
 /// A message the bot has received from Telegram.
@@ -63,6 +65,18 @@ extension TGMessage {
     /// surfaces them as the platform type the rest of the codebase uses.
     var sentDate: Date {
         Date(timeIntervalSince1970: .init(date))
+    }
+    
+    
+    /// Concatenates all user strings into one. If there are none in this message, then `nil` is returned.
+    var allUserStrings: String? {
+        [
+            text,
+            caption,
+        ]
+            .compactMap(\.self)
+            .joined(separator: "\n")
+            .nonEmptyOrNil
     }
 }
 
