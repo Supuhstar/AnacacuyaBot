@@ -7,6 +7,8 @@
 
 import Foundation
 
+import RectangleTools
+
 
 
 /// One available rendition of a photo sent through Telegram.
@@ -48,11 +50,29 @@ extension TGPhotoSize: Identifiable {
 
 
 
+extension TGPhotoSize {
+    
+    /// The actual file size, or if that's unknown, an estimation assuming it's a 3-channel JPEG
+    ///
+    /// According to [ToolStudio](https://toolstud.io/photo/filesize.php):
+    /// > Uncompressed: Width × Height × Bits-per-pixel ÷ 8 = bytes. A 24MP image at 24-bit RGB = 24,000,000 × 3 = 72 MB uncompressed. JPEG compression typically reduces this to 2-8 MB depending on quality setting.
+    var estimatedJpegSize: Int {
+        fileSize ?? ((dimensions.area * 3) / 8) // Fallback to assuming an opaque JPEG and estimating the size of that
+    }
+    
+    
+    var dimensions: IntSize {
+        .init(width: width, height: height)
+    }
+}
+
+
+
 extension Array where Element == TGPhotoSize {
     
-    /// Picks the highest-fidelity rendition that fits within the given size
-    /// budget, falling back to the largest by pixel count if no rendition
-    /// reports its bytes.
+    /// Picks the highest-fidelity rendition that fits within the given size budget.
+    ///
+    /// If the file size is unknown, it's estimated assume the image is a 24-bit RGB JPEG.
     ///
     /// Two layered considerations drive this policy. First, vision models like
     /// moondream resize internally regardless of input dimensions, so download
@@ -62,10 +82,9 @@ extension Array where Element == TGPhotoSize {
     /// when that happens, pixel count is the best signal we have left, and
     /// "largest by area" gives the OCR-friendly choice.
     ///
-    /// - Parameter limit: The byte ceiling. Renditions reporting a size at or
-    ///                    below this value are eligible.
+    /// - Parameter limit: The byte ceiling. Elements with a size at or below this value are eligible.
     ///
-    /// - Returns: The chosen rendition, or `nil` only if the array is empty.
+    /// - Returns: The chosen element, or `nil` if none match.
     func largest(under limit: Measurement<UnitInformationStorage>) -> TGPhotoSize? {
         let limitBytes = Int(limit.converted(to: .bytes).value)
         
@@ -74,10 +93,6 @@ extension Array where Element == TGPhotoSize {
             return size <= limitBytes
         }
         
-        if let best = eligible.max(by: { ($0.fileSize ?? 0) < ($1.fileSize ?? 0) }) {
-            return best
-        }
-        
-        return self.max(by: { ($0.width * $0.height) < ($1.width * $1.height) })
+        return eligible.max(by: { $0.estimatedJpegSize < $1.estimatedJpegSize })
     }
 }

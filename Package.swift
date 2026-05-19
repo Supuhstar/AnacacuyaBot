@@ -13,6 +13,7 @@ let package = Package(
     
     dependencies: [
         .package(url: "https://github.com/RougeWare/Swift-Collection-Tools.git", from: "3.2.1"),
+        .package(url: "https://github.com/RougeWare/Swift-Rectangle-Tools", from: "2.17.1"),
         .package(url: "https://github.com/RougeWare/Swift-SemVer.git", from: "2.0.0"),
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
         .package(url: "https://github.com/RougeWare/Swift-Special-String", from: "1.2.0"),
@@ -25,6 +26,7 @@ let package = Package(
             name: "AnacacuyaBot",
             dependencies: [
                 .product(name: "CollectionTools", package: "Swift-Collection-Tools"),
+                .product(name: "RectangleTools", package: "Swift-Rectangle-Tools"),
                 .product(name: "SemVer", package: "Swift-SemVer"),
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
                 .product(name: "SpecialString", package: "Swift-Special-String"),

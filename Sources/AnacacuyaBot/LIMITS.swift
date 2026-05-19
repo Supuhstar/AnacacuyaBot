@@ -58,20 +58,11 @@ extension Limits {
 
 extension Limits {
     
-    /// Soft ceiling for photo downloads.
+    /// Maximum amount of data for a single photo download.
     ///
-    /// Telegram delivers every photo in multiple resolutions and the bot picks
-    /// one. The vision model resizes internally regardless of input size, so
-    /// the bottleneck on quality isn't pixel count — it's how long the byte
-    /// transfer takes. This cap keeps the largest downloaded rendition modest
-    /// enough that the user doesn't wait noticeably while still being big
-    /// enough for OCR to work reliably on typical chat content.
+    /// Telegram delivers every photo in multiple resolutions and the bot picks one.
+    /// This cap keeps the largest downloaded rendition modest enough that the user doesn't wait much (and the host machine doesn't get DOS'd), while still being big enough for OCR to work reliably on typical chat content.
     ///
-    /// When no rendition reports a size at or below this value, the picker
-    /// falls back to the largest by pixel count regardless — see
-    /// ``Array/largest(under:)``.
-    ///
-    /// The hard ceiling from Telegram's standard Bot API is 20MB; this value
-    /// sits well below that to keep latency predictable.
-    static let preferredMaxPhotoSize = Measurement<UnitInformationStorage>(value: 2, unit: .megabytes)
+    /// The hard ceiling from Telegram's standard Bot API is 20MB; this value sits well below that to keep latency predictable.
+    static let maxTelegramFileDownloadSize = Measurement<UnitInformationStorage>(value: 2, unit: .megabytes)
 }

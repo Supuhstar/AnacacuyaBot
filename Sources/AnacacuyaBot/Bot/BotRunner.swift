@@ -168,7 +168,7 @@ private extension BotRunner {
     /// ``TGMessage/caption`` (media messages with a comment), so we
     /// pull from whichever is present. When photos arrive *and* we're
     /// actually going to talk to the LLM about them, the most suitable
-    /// rendition is downloaded eagerly up to ``Limits/preferredMaxPhotoSize``
+    /// rendition is downloaded eagerly up to ``Limits/maxTelegramFileDownloadSize``
     /// and the bytes ride along on the resulting `ChatMessage`. Downstream,
     /// ``modelForResponse(to:inReplyTo:)`` picks the vision model for
     /// turns whose final user message carries image data.
@@ -252,7 +252,7 @@ private extension BotRunner {
               nil != models.vision
         else { return nil }
         
-        guard let chosen = photos.largest(under: Limits.preferredMaxPhotoSize) else { return nil }
+        guard let chosen = photos.largest(under: Limits.maxTelegramFileDownloadSize) else { return nil }
         
         do {
             return try await telegram.downloadFile(fileId: chosen.fileId)
