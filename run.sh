@@ -95,7 +95,7 @@ if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
         echo "❌ TELEGRAM_BOT is not set. Set it to the @username of the bot you want to run. For example, if your bot is '@AwesomeBot', set 'export TELEGRAM_BOT=AwesomeBot'." >&2
         exit 12
     fi
-    TELEGRAM_BOT_TOKEN=$(getToken) || exit $?
+    export TELEGRAM_BOT_TOKEN=$(getToken) || exit $?
 fi
 
 
