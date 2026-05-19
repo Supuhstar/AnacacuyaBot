@@ -60,15 +60,56 @@ fi
 
 
 
+# MARK: - Try to load bot token from keyring
+
+getToken_security() {
+    security find-generic-password \
+        -a "$USER" \
+        -s "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        -w
+}
+
+
+getToken_secret_tool() {
+    secret-tool lookup \
+        service "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        user "$USER"
+}
+
+
+getToken() {
+    if command -v security &>/dev/null; then
+        getToken_security
+    elif command -v secret-tool &>/dev/null; then
+        getToken_secret_tool
+    else
+	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'security' and 'secret-tool')." >&2
+        return 11
+    fi
+}
+
+
+
+if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
+    if [[ -z "${TELEGRAM_BOT}" ]]; then
+        echo "❌ TELEGRAM_BOT is not set. Set it to the @username of the bot you want to run. For example, if your bot is '@AwesomeBot', set 'export TELEGRAM_BOT=AwesomeBot'." >&2
+        exit 12
+    fi
+    TELEGRAM_BOT_TOKEN=$(getToken) || exit $?
+fi
+
+
+
+
 # MARK: - Basic requirements check
 
 if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
-    echo "You need to set TELEGRAM_BOT_TOKEN to the token @BotFather assigned to your bot"
+    echo "❌ You need to set TELEGRAM_BOT_TOKEN to the token @BotFather assigned to your bot" >&2
     exit 10
 fi
 
 if ! command -v ollama &> /dev/null; then
-    echo "❌ Ollama is not installed. Ollama is required for this bot."
+    echo "❌ Ollama is not installed. Ollama is required for this bot." >&2
     exit 20
 fi
 
@@ -81,7 +122,7 @@ OLLAMA_MODEL=${OLLAMA_MODEL:-"smollm2"}
 
 model_exists() {
     local model="$1"
-    ollama list | awk 'NR>1 {print $1}' | grep -qx "$model"
+    ollama list | awk 'NR>1 {split($1,a,":"); print a[1]}' | grep -qx "$model"
 }
 
 
@@ -89,13 +130,13 @@ if model_exists "$OLLAMA_MODEL"; then
     echo "✅ Model '$OLLAMA_MODEL' is ready."
 else
     if $FAIL_IF_MODEL_NOT_FOUND; then
-        echo "❌ Model '$OLLAMA_MODEL' not found."
+        echo "❌ Model '$OLLAMA_MODEL' not found." >&2
         exit 21
     else
         echo "Model '$OLLAMA_MODEL' not found. Downloading it..."
         
         if ! ollama pull "${OLLAMA_MODEL}"; then
-            echo "❌ Failed to pull '$OLLAMA_MODEL'"
+            echo "❌ Failed to pull '$OLLAMA_MODEL'" >&2
             exit 22
         fi
     fi
