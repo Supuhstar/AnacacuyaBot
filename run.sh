@@ -62,6 +62,10 @@ fi
 
 # MARK: - Try to load bot token from keyring
 
+
+
+# MARK: getToken
+
 getToken_security() {
     security find-generic-password \
         -a "$USER" \
@@ -89,13 +93,68 @@ getToken() {
 }
 
 
+# MARK: storeToken
+
+storeToken_security() {
+    local token="$1"
+    security add-generic-password \
+        -a "$USER" \
+        -s "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        -w "$token" \
+        -U
+}
+
+
+storeToken_secret_tool() {
+    local token="$1"
+    echo -n "$token" | secret-tool store \
+        --label="TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        service "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        user "$USER"
+}
+
+
+storeToken() {
+    local token="$1"
+    if command -v security &>/dev/null; then
+        storeToken_security "$token"
+    elif command -v secret-tool &>/dev/null; then
+        storeToken_secret_tool "$token"
+    else
+	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'security' and 'secret-tool')." >&2
+        return 11
+    fi
+}
+
+
+
+# MARK: Make sure token is in-place
 
 if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
+    echo "TELEGRAM_BOT_TOKEN is not set. Attempting to read from keyring..." >&2
     if [[ -z "${TELEGRAM_BOT}" ]]; then
-        echo "❌ TELEGRAM_BOT is not set. Set it to the @username of the bot you want to run. For example, if your bot is '@AwesomeBot', set 'export TELEGRAM_BOT=AwesomeBot'." >&2
+        echo "❌ Neither TELEGRAM_BOT_TOKEN nor TELEGRAM_BOT is set. \
+                Set TELEGRAM_BOT to the @username of the bot you want to run. For example, if your bot is '@AwesomeBot', set 'export TELEGRAM_BOT=AwesomeBot'.\
+                Alternatively, if you're comfortable with lower security, set TELEGRAM_BOT_TOKEN to the token which the @BotFather gave you on Telegram. For example, 'export TELEGRAM_BOT_TOKEN=jskifhefkizuehnfizhediwurfhewku'.
+                " >&2
         exit 12
     fi
-    export TELEGRAM_BOT_TOKEN=$(getToken) || exit $?
+    
+    export TELEGRAM_BOT_TOKEN=$(getToken)
+    getToken_status=$?
+    
+    if [[ $getToken_status -eq 11 ]]; then
+        # No keyring backend at all — hard fail
+        exit $getToken_status
+    elif [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
+        # Keyring exists but no entry yet — offer to save
+        echo "No token found in keyring for @${TELEGRAM_BOT}."
+        read -rs "?Paste your bot token here to store it securely: " new_token
+        echo
+        storeToken "$new_token" || exit $?
+        TELEGRAM_BOT_TOKEN="$new_token"
+        echo "✅ ${TELEGRAM_BOT} Token saved to keyring. It will automatically be read from that keyring in future runs as long as you set 'export TELEGRAM_BOT=\"${TELEGRAM_BOT}\"'."
+    fi
 fi
 
 
