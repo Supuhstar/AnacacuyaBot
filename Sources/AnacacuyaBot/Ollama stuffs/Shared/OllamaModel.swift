@@ -18,8 +18,23 @@ public struct OllamaModel: OllamaResponse {
 
 
 
+extension OllamaModel: CustomStringConvertible {
+    public var description: String {
+        if let capabilities = capabilities?.nonEmptyOrNil {
+            "\(name.description) (\(capabilities.map(\.description).joined(separator: ", ")))"
+        }
+        else {
+            name.description
+        }
+    }
+}
+
+
+
+// MARK: - ModelCompatibility
+
 /// A known capability of a machine-learning model
-public enum ModelCapability: OllamaResponse {
+public enum ModelCapability: OllamaResponse, Equatable {
     
     /// The model can complete text
     case textCompletion
@@ -45,6 +60,19 @@ public extension ModelCapability {
         case "thinking": self = .thinking
         case "vision": self = .vision
         default: self = .other(value)
+        }
+    }
+}
+
+
+
+extension ModelCapability: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .textCompletion: return "text completion"
+        case .thinking: return "thinking"
+        case .vision: return "vision"
+        case .other(let value): return value
         }
     }
 }

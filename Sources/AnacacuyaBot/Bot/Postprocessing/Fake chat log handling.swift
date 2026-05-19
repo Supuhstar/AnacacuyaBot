@@ -9,7 +9,7 @@ import Foundation
 
 
 
-public extension String {
+public extension Substring {
     
     /// Removes fake chat logs from an LLM's response.
     ///

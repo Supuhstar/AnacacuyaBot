@@ -7,6 +7,8 @@
 
 import Foundation
 
+import SimpleLogging
+
 
 
 /// A structured form of a qualified Ollama model name.
@@ -53,7 +55,6 @@ extension ModelName: LosslessStringConvertible {
     ///
     /// - Parameter string: The raw form of the qualified model name. For example, `"quak:3b"`
     public init?<S: StringProtocol>(_ string: S) {
-        print(unsafe regex)
         guard let match = try? unsafe regex.firstMatch(in: String(string)) else {
             return nil
         }
@@ -196,7 +197,7 @@ extension ModelName: ExpressibleByStringLiteral {
         }
         else {
             let message = "Developer error: invalid model name as string literal: \(value)"
-            print(message)
+            log(fatal: message)
             fatalError(message)
         }
     }

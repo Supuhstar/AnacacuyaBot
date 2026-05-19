@@ -89,8 +89,7 @@ extension Array where Element == TGPhotoSize {
         let limitBytes = Int(limit.converted(to: .bytes).value)
         
         let eligible = self.filter { photo in
-            guard let size = photo.fileSize else { return false }
-            return size <= limitBytes
+            photo.estimatedJpegSize <= limitBytes
         }
         
         return eligible.max(by: { $0.estimatedJpegSize < $1.estimatedJpegSize })

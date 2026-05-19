@@ -12,6 +12,7 @@ import FoundationNetworking
 import RegexBuilder
 
 import SerializationTools
+import SimpleLogging
 
 
 
@@ -125,11 +126,11 @@ extension TelegramClient {
         guard text.isNotEmpty
               || (text.matches(noResponseRegex))
         else {
-            print("🙊 (chose to say nothing)")
+            log(info: "🙊 (chose to say nothing)")
             return
         }
         
-        print("🗣️\(nil == inReplyTo ? "🤖" : "👩🏽‍💻"):", text)
+        log(info: "🗣️\(nil == inReplyTo ? "🤖" : "👩🏽‍💻"): \(text)")
         
         let _: TGMessage = try await post(
             "sendMessage",

@@ -8,6 +8,7 @@
 import Foundation
 
 import CollectionTools
+import SimpleLogging
 
 
 
@@ -83,9 +84,10 @@ extension BotRunner {
             visionModel = nil
         }
         
-        print("🤖 Logged in as @\(username) | llm: \(llmModel)")
+        log(info: "🤖 Logged in as @\(username)")
+        log(info: "    💬 LLM: \(llmModel)")
         if let visionModel {
-            print("👁️  Vision model: \(visionModel)")
+            log(info: "    👁️ Vision model: \(visionModel)")
         }
         
         return BotRunner(
@@ -132,7 +134,7 @@ private extension BotRunner {
     /// hiccups) shouldn't take the bot down — they should resolve on
     /// the next cycle.
     private func listenForAllMessages() async {
-        print("📡 Listening for messages...")
+        log(info: "📡 Listening for messages...")
         while false == Task.isCancelled {
             do {
                 let updates = try await telegram.getUpdates()
@@ -146,12 +148,12 @@ private extension BotRunner {
             }
             catch {
                 if let error = error as? TelegramHttpError {
-                    print("⚠️", error.localizedDescription)
+                    log(error: error, "⚠️ \(error.localizedDescription)")
                 }
                 else {
-                    print("⚠️ Update error:", error)
+                    log(error: error, "⚠️ Update error")
                 }
-                print("Backing off for 5s...")
+                log(error: "Backing off for 5s...\n\n\n")
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -185,27 +187,42 @@ private extension BotRunner {
             ?? incomingMessage.caption?.nonEmptyOrNil
             ?? ""
         
-        let photos = incomingMessage.photo ?? []
+        let receivedImages = incomingMessage.photo ?? []
         
-        // Skip messages that carry neither user text nor a photo — service
-        // messages, edits we don't care about, etc.
-        guard false == wholeUserText.isEmpty || false == photos.isEmpty else { return }
+        guard wholeUserText.isNotEmpty
+                || receivedImages.isNotEmpty
+        else {
+            // Skip messages that carry neither user text nor a photo — service messages, edits we don't care about, etc.
+            return
+        }
+        
+        if nil == models.vision,
+           wholeUserText.isEmpty
+        {
+            if !receivedImages.isEmpty {
+                log(error: "🖼️❌ Received \(receivedImages.count) image(s) but no text when there's no vision model specified. Set a vision model with the \(UnixEnvironmentKey.visionModelName.rawValue) environment variable to process images.")
+            }
+            return
+        }
+
         
         let sender = incomingMessage.from?.nameForLlm ?? "someone"
-        let shouldRespondToMessage = shouldRespond(to: incomingMessage)
+        let userExplicitlyRequestedResponse = didUserExplicitlyRequestResponse(to: incomingMessage)
         
-        print(
-            shouldRespondToMessage ? "👀" : " ",
-            "[\(incomingMessage.chat.title ?? incomingMessage.chat.username ?? "?")]",
-            "\(sender)\(photos.isEmpty ? "" : " 📷"):",
-            wholeUserText.isEmpty ? "(image)" : wholeUserText
+        log(info: [
+                userExplicitlyRequestedResponse ? "👀" : " ",
+                "[\(incomingMessage.chat.title ?? incomingMessage.chat.username ?? "?")]",
+                "\(sender)\(receivedImages.isEmpty ? "" : " 🖼️"):",
+                wholeUserText
+            ]
+            .joined(separator: " ")
         )
         
         var state = await store.state(for: incomingMessage.chat)
         
         
         if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
-            print("Command result:", commandResult)
+            log(info: "Command result: \(commandResult)")
             
             switch commandResult {
             case .consumedTurn:
@@ -213,10 +230,15 @@ private extension BotRunner {
             }
         }
         
+        guard await limiter.isStillWithinDailyMessageLimit() else {
+            log(info: "Daily message limit exceeded. Skipping...")
+            return
+        }
+        
         // Photo download deferred until after the command check so a
         // command message with an attached photo doesn't waste a download
         // on bytes the LLM path will never see.
-        let imageData = await resolvePhoto(from: photos)
+        let image = await processImage(receivedImages: receivedImages, visionModel: models.vision)
         
         await sendLlmMessage(
             chatState: &state,
@@ -224,11 +246,36 @@ private extension BotRunner {
                 incomingMessage,
                 sender: sender,
                 wholeUserText: wholeUserText,
-                images: imageData.map { [$0] },
+                images: image.map { [$0] },
             ),
-            shouldRespondToMessage: shouldRespondToMessage,
+            userExplicitlyRequestedResponse: userExplicitlyRequestedResponse,
             inReplyTo: .init(incomingMessage),
         )
+    }
+    
+    
+    private func processImage(receivedImages: [TGPhotoSize], visionModel: OllamaModel?) async -> ChatMessage.ProcessedImage? {
+        guard receivedImages.isNotEmpty else {
+            return nil
+        }
+        guard let visionModel = models.vision else {
+            log(warning: "No vision model to process received image. Treating message as text-only.")
+            return nil
+        }
+        guard let downloadedImage = await downloadPhoto(from: receivedImages) else {
+            log(error: "Failed to download photo")
+            return nil
+        }
+        
+        do {
+            let image = try await downloadedImage.processedImage(using: visionModel, in: ollama)
+            log(info: " 🖼️: \(image.visionModelDescription)")
+            return image
+        }
+        catch {
+            log(error: error, "Couldn't process photo. Treating message as text-only.")
+            return nil
+        }
     }
     
     
@@ -245,20 +292,23 @@ private extension BotRunner {
     /// - Parameter photos: All renditions Telegram delivered for this
     ///                     message. Empty array is allowed and yields nil.
     ///
-    /// - Returns: Image bytes ready to attach to an `OllamaMessage`, or
-    ///            nil when the bot should treat this turn as text-only.
-    private func resolvePhoto(from photos: [TGPhotoSize]) async -> Data? {
+    /// - Returns: Image bytes ready to attach to an `OllamaMessage`, or nil when the bot should treat this turn as text-only.
+    private func downloadPhoto(from photos: [TGPhotoSize]) async -> Data? {
         guard false == photos.isEmpty,
               nil != models.vision
-        else { return nil }
+        else {
+            return nil
+        }
         
-        guard let chosen = photos.largest(under: Limits.maxTelegramFileDownloadSize) else { return nil }
+        guard let chosen = photos.largest(under: Limits.maxTelegramFileDownloadSize) else {
+            return nil
+        }
         
         do {
             return try await telegram.downloadFile(fileId: chosen.fileId)
         }
         catch {
-            print("⚠️ Couldn't download photo: \(error)")
+            log(error: error, "Couldn't download photo")
             return nil
         }
     }
@@ -312,21 +362,17 @@ private extension BotRunner {
     /// Asks the LLM to send a message in response to the incoming Telegram message
     ///
     /// - Parameters:
-    ///   - state:                  This tracks the state of the chat. This function will mutate it to register that the given message was received and that the bot responded with its own.
-    ///   - incomingMessage:        The original message from Telegram, like if a user mentions or replies to this bot's message.
-    ///   - shouldRespondToMessage: Whether the bot should respond directly to the incoming message. `false` indicates that the bot will send a standalone message instead.
-    ///   - repliedToMessage:       If there's a specific message that the bot should respond to, put that here
-    private func sendLlmMessage(chatState state: inout ChatState, incomingMessage: ChatMessage, shouldRespondToMessage: Bool, inReplyTo repliedToMessage: TGRepliedToMessage?) async {
+    ///   - state:                           This tracks the state of the chat. This function will mutate it to register that the given message was received and that the bot responded with its own.
+    ///   - incomingMessage:                 The original message from Telegram, like if a user mentions or replies to this bot's message.
+    ///   - userExplicitlyRequestedResponse: Whether the bot should respond directly to the incoming message. `false` indicates that the bot may choose to send a standalone message instead.
+    ///   - repliedToMessage:                If there's a specific message that the bot should respond to, put that here
+    private func sendLlmMessage(chatState state: inout ChatState, incomingMessage: ChatMessage, userExplicitlyRequestedResponse: Bool, inReplyTo repliedToMessage: TGRepliedToMessage?) async {
         // Uncomment when you're testing in production:
 //        try? await send(message: "😴💤 [I'm in maintenance mode]", inChat: state.chat.id, replyingTo: incomingMessage.id, chatState: &state); return
         
-        guard await limiter.isStillWithinDailyMessageLimit() else {
-            return
-        }
-        
         let nextStep = await state.register(didReceiveMessage: incomingMessage)
         
-        if shouldRespondToMessage {
+        if userExplicitlyRequestedResponse {
             await respond(inReplyTo: repliedToMessage, state: &state)
         }
         else {
@@ -341,7 +387,7 @@ private extension BotRunner {
     }
     
     
-    private func shouldRespond(to incomingMessage: TGMessage) -> Bool {
+    private func didUserExplicitlyRequestResponse(to incomingMessage: TGMessage) -> Bool {
         isDirectMessage(incomingMessage)
         || isMentioned(incomingMessage)
         || isReplyToBot(incomingMessage)
@@ -383,12 +429,12 @@ private extension BotRunner {
     ) async throws {
         guard false == message.isEmpty else { return }
         
-        await limiter.registerDidSendMessage()
-        
         try await telegram.sendMessage(
             chatId: chatId,
             text: message.telegram_escapedForMarkdownV2,
             inReplyTo: repliedToMessage)
+        
+        await limiter.registerDidSendMessage()
         
         await state.register(didSendMessage: ChatMessage(
             id: nil,
@@ -529,23 +575,21 @@ private extension BotRunner {
         state: inout ChatState,
         inReplyTo: Int?,
     ) async {
-        let model = modelForResponse(to: context, inReplyTo: inReplyTo)
         let reply: String
         
         do {
             async let deduplicated = context.deduplicated()
             
-            reply = String(
-                try await ollama.chat(
-                    with: model,
+            reply = try await ollama
+                .chat(
+                    with: models.llm,
                     context: await deduplicated,
                     settings: settings
                 )
-                .removingFakeChatLogs()
-            )
+                .postprocessed()
         }
         catch {
-            print("⚠️ Generation error: \(error)")
+            log(error: error, "Generation error: \(error)")
             return
         }
         
@@ -562,39 +606,8 @@ private extension BotRunner {
             try await send(message: cleaned, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
         }
         catch {
-            print("⚠️ Failed to send generated reply: \(error)")
+            log(error: error, "Failed to send generated reply")
         }
-    }
-    
-    
-    /// Picks the model best suited to generate this particular turn.
-    ///
-    /// Two ideas combine here. First, interjections are commentary on the
-    /// conversation as a whole, not a focused response to one message.
-    /// Reaching for the vision model just because some old message in
-    /// history was a photo would burn its bigger latency on a turn that
-    /// isn't actually about the photo — so interjections always go
-    /// through the text LLM regardless of what's in history.
-    ///
-    /// Second, for direct responses, the question is whether the message
-    /// we're answering carries image data. If it does and a vision model
-    /// is configured, that's what we want. If no vision model is
-    /// configured, the text LLM is the only choice — the response will
-    /// be image-blind, which is a degraded but functional fallback.
-    private func modelForResponse(to context: [ChatMessage], inReplyTo: Int?) -> OllamaModel {
-        // Interjections aren't focused on any one message, so the bigger
-        // vision model isn't earned.
-        guard nil != inReplyTo else { return models.llm }
-        
-        let lastUserHasImages = context
-            .last(where: { .user == $0.role })?
-            .images?
-            .isEmpty == false
-        
-        if lastUserHasImages, let vision = models.vision {
-            return vision
-        }
-        return models.llm
     }
     
     

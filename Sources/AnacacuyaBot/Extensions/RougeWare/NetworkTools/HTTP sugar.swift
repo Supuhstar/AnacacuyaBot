@@ -11,6 +11,7 @@ import FoundationNetworking
 #endif
 
 import SerializationTools
+import SimpleLogging
 
 
 
@@ -256,7 +257,7 @@ public extension URL {
            false == (200...200).contains(statusCode)
         {
             let message = String(data: data, encoding: .utf8)
-            print("⚠️ Error \(statusCode):", message ?? "(could not decode response)")
+            log(error: "⚠️ Error \(statusCode): \(message ?? "(could not decode response)")")
             throw HttpError(statusCode: UInt16(statusCode), message: message)
         }
         

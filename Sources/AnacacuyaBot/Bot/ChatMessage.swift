@@ -45,40 +45,22 @@ public struct ChatMessage: Sendable {
     /// guard against that case before constructing.
     let text: String
     
-    /// Raw image bytes attached to this message, when the underlying
-    /// Telegram message carried photos and a vision model is configured
-    /// to consume them. Nil whenever the turn is text-only — which is
-    /// the case for the vast majority of messages, including every
-    /// outgoing message the bot itself sends.
+    /// Images attached to this message, pre-processed by a vision model.
     ///
-    /// Stored as `Data` rather than a path or `URL` because the bot
-    /// downloads photos eagerly when they arrive and passes the bytes
-    /// directly to Ollama. There's no on-disk caching layer, and any
-    /// retry logic happens at the Telegram client level before this
-    /// field is populated.
-    ///
-    /// The array shape (rather than a single optional `Data`) mirrors
-    /// Ollama's chat-message wire format, which accepts multiple images
-    /// per turn. The bot currently only resolves one image per inbound
-    /// Telegram message, but the type leaves the door open for media-group
-    /// merging without an API change.
-    let images: [Data]?
+    /// Nil whenever the message is text-only, which is the common case, including every outgoing message the bot itself sends right now.
+    let images: [ProcessedImage]?
     
     
     /// Builds a `ChatMessage` with all fields specified explicitly.
     ///
-    /// `images` defaults to `nil` because the overwhelming majority of
-    /// chat messages are text-only — system prompts, bot replies, plain
-    /// user text. Making image attachment opt-in via a default keeps the
-    /// common call site terse while preserving access for the
-    /// vision-handling path that does pass image bytes.
+    /// `images` defaults to `nil` because the common case is text-only messages (user messages to each other, system prompts, bot replies, etc.). Making image attachment opt-in via a default keeps the common call site terse while preserving access for the vision-handling path that does pass image bytes.
     init(
         id: TGMessage.ID?,
         senderName: String,
         role: Role,
         isReply: Bool,
         text: String,
-        images: [Data]? = nil,
+        images: [ProcessedImage]? = nil,
     ) {
         self.id = id
         self.senderName = senderName
@@ -99,11 +81,9 @@ extension ChatMessage {
     ///   - incomingMessage: The original message sent from a Telegram user
     ///   - sender:          A pre-calculated pretty name for the sender
     ///   - wholeUserText:   The text of the message, already verified that it's non-empty
-    ///   - images:          _optional_ - Raw bytes of any images attached to
-    ///                      the message, when the bot has resolved them.
-    ///                      Nil when the message is text-only or when the
-    ///                      bot couldn't download the photos.
-    init(_ incomingMessage: TGMessage, sender: String, wholeUserText: String, images: [Data]? = nil) {
+    ///   - images:          _optional_ - Any images attached to the message, when the bot has resolved & processed them.
+    ///                      Nil when the message is text-only or when the bot couldn't download the photos.
+    init(_ incomingMessage: TGMessage, sender: String, wholeUserText: String, images: [ProcessedImage]? = nil) {
         self.init(
             id: incomingMessage.id,
             senderName: sender,
@@ -133,13 +113,56 @@ extension ChatMessage {
     var contentForLlm: String {
         switch role {
         case .system:
-            text
+            textForLlm
             
         case .assistant, .user:
             """
             \(senderName):
+            \(textForLlm)
+            """
+        }
+    }
+    
+    
+    /// The message's text which we will show to the LLM.
+    ///
+    /// If this message includes images, then this returns image descriptions as well as user text.
+    var textForLlm: String {
+        if let imagesDescription {
+            """
+            \(imagesDescription)
             \(text)
             """
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        else {
+            text
+        }
+    }
+    
+    
+    /// The message's images' descriptions, all as one string
+    var imagesDescription: String? {
+        guard let images = images?.nonEmptyOrNil else {
+            return nil
+        }
+        
+        if images.count == 1 {
+            return """
+                Image attachment: \(images[0].visionModelDescription)
+                """
+        }
+        else {
+            return """
+                \(images.count) images:
+                \(images
+                    .enumerated()
+                    .map { (index, image) in
+                        "- Image attachment \(index + 1): \(image.visionModelDescription)"
+                    }
+                    .joined(separator: "\n")
+                )
+                """
         }
     }
 }
@@ -161,30 +184,3 @@ extension ChatMessage {
         case user
     }
 }
-
-
-
-// MARK: - Conveniences
-
-//extension ChatMessage {
-//    
-//    /// The content of this chat message, formatted to send to an LLM
-//    var formattedToShowToLlm: String {
-//        switch role {
-//        case .system:    "[SYSTEM: \(text)]"
-//        case .assistant: "You: \(text)"
-//        case .user:      "\(senderName): \(text)"
-//        }
-//    }
-//}
-//
-//
-//
-//extension [ChatMessage] {
-//    
-//    /// All the messages in this chat message array, concatenate in a way that an LLM can process
-//    var formattedToShowToLlm: String {
-//        map(\.formattedToShowToLlm)
-//        .joined(separator: "\n\n")
-//    }
-//}

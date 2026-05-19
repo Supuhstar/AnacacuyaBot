@@ -67,7 +67,7 @@ extension UnixEnvironment {
 /// A key to an environment value that this bot reads as needed
 struct UnixEnvironmentKey<Value: Sendable, Backup: Sendable>: Sendable {
     
-    fileprivate let rawValue: String
+    public let rawValue: String
     
     fileprivate let parse: ParseFunction
     
