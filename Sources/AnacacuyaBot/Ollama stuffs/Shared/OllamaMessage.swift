@@ -24,6 +24,7 @@ public extension OllamaMessage {
         self.init(
             role: chatMessage.role,
             content: chatMessage.contentForLlm,
+            images: chatMessage.images
         )
     }
 }

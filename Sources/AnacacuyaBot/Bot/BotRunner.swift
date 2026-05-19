@@ -84,6 +84,9 @@ extension BotRunner {
         }
         
         print("🤖 Logged in as @\(username) | llm: \(llmModel)")
+        if let visionModel {
+            print("👁️  Vision model: \(visionModel)")
+        }
         
         return BotRunner(
             telegram: telegram,
@@ -142,7 +145,7 @@ private extension BotRunner {
                 }
             }
             catch {
-                if let error = error as? TelegramClient.UpdateError {
+                if let error = error as? TelegramHttpError {
                     print("⚠️", error.localizedDescription)
                 }
                 else {
@@ -157,9 +160,36 @@ private extension BotRunner {
     
     /// Process the given user message.
     ///
-    /// If it's a command message, then that command is run. Otherwise, it's sent to the LLM to synthesize a response.
+    /// If it's a command message, that command is run. Otherwise, the
+    /// message is sent to the LLM to synthesize a response.
+    ///
+    /// Photos receive special handling: the inbound message's typed
+    /// content might live in ``TGMessage/text`` (plain text messages) or
+    /// ``TGMessage/caption`` (media messages with a comment), so we
+    /// pull from whichever is present. When photos arrive *and* we're
+    /// actually going to talk to the LLM about them, the most suitable
+    /// rendition is downloaded eagerly up to ``Limits/preferredMaxPhotoSize``
+    /// and the bytes ride along on the resulting `ChatMessage`. Downstream,
+    /// ``modelForResponse(to:inReplyTo:)`` picks the vision model for
+    /// turns whose final user message carries image data.
+    ///
+    /// The download is deliberately deferred past the command check so a
+    /// `/command` accompanied by a photo doesn't burn a Telegram
+    /// round-trip on bytes nothing will read.
     private func handleIncomingMessage(_ incomingMessage: TGMessage) async throws {
-        guard let wholeUserText = incomingMessage.text?.nonEmptyOrNil else { return }
+        // Telegram puts a user's typed content in `text` for plain messages
+        // and in `caption` for media messages. Falling through to caption
+        // means a photo with a comment behaves the same as a text message
+        // to the rest of the dispatch logic.
+        let wholeUserText = incomingMessage.text?.nonEmptyOrNil
+            ?? incomingMessage.caption?.nonEmptyOrNil
+            ?? ""
+        
+        let photos = incomingMessage.photo ?? []
+        
+        // Skip messages that carry neither user text nor a photo — service
+        // messages, edits we don't care about, etc.
+        guard false == wholeUserText.isEmpty || false == photos.isEmpty else { return }
         
         let sender = incomingMessage.from?.nameForLlm ?? "someone"
         let shouldRespondToMessage = shouldRespond(to: incomingMessage)
@@ -167,8 +197,8 @@ private extension BotRunner {
         print(
             shouldRespondToMessage ? "👀" : " ",
             "[\(incomingMessage.chat.title ?? incomingMessage.chat.username ?? "?")]",
-            "\(sender):",
-            wholeUserText
+            "\(sender)\(photos.isEmpty ? "" : " 📷"):",
+            wholeUserText.isEmpty ? "(image)" : wholeUserText
         )
         
         var state = await store.state(for: incomingMessage.chat)
@@ -183,16 +213,54 @@ private extension BotRunner {
             }
         }
         
+        // Photo download deferred until after the command check so a
+        // command message with an attached photo doesn't waste a download
+        // on bytes the LLM path will never see.
+        let imageData = await resolvePhoto(from: photos)
+        
         await sendLlmMessage(
             chatState: &state,
             incomingMessage: ChatMessage(
                 incomingMessage,
                 sender: sender,
                 wholeUserText: wholeUserText,
+                images: imageData.map { [$0] },
             ),
             shouldRespondToMessage: shouldRespondToMessage,
             inReplyTo: .init(incomingMessage),
         )
+    }
+    
+    
+    /// Downloads the photo rendition best suited for vision inference,
+    /// or returns `nil` if there's nothing worth downloading.
+    ///
+    /// Returns `nil` in three cases, each meaning "proceed text-only":
+    /// the message had no photos, no vision model is configured to
+    /// consume them, or the download itself failed. Errors during
+    /// download are logged but don't propagate — a photo turn that loses
+    /// its photo is still a valid text turn, and the alternative would
+    /// be to drop the whole message over a transient network blip.
+    ///
+    /// - Parameter photos: All renditions Telegram delivered for this
+    ///                     message. Empty array is allowed and yields nil.
+    ///
+    /// - Returns: Image bytes ready to attach to an `OllamaMessage`, or
+    ///            nil when the bot should treat this turn as text-only.
+    private func resolvePhoto(from photos: [TGPhotoSize]) async -> Data? {
+        guard false == photos.isEmpty,
+              nil != models.vision
+        else { return nil }
+        
+        guard let chosen = photos.largest(under: Limits.preferredMaxPhotoSize) else { return nil }
+        
+        do {
+            return try await telegram.downloadFile(fileId: chosen.fileId)
+        }
+        catch {
+            print("⚠️ Couldn't download photo: \(error)")
+            return nil
+        }
     }
     
     
@@ -447,6 +515,13 @@ private extension BotRunner {
     
     
     /// Tells the LLM to generate a respond to the given context messages, optionally explicitly replying to one.
+    ///
+    /// Whether this is a direct response or an interjection is inferred
+    /// from `inReplyTo`: non-nil means we're answering a specific
+    /// message, nil means we're commenting on the conversation overall.
+    /// That distinction is forwarded to ``modelForResponse(to:inReplyTo:)``
+    /// because it changes which model is appropriate — see that method
+    /// for why.
     private func sendGeneratedResponse(
         context: [ChatMessage],
         settings: OllamaModelOptions?,
@@ -454,6 +529,7 @@ private extension BotRunner {
         state: inout ChatState,
         inReplyTo: Int?,
     ) async {
+        let model = modelForResponse(to: context, inReplyTo: inReplyTo)
         let reply: String
         
         do {
@@ -461,7 +537,7 @@ private extension BotRunner {
             
             reply = String(
                 try await ollama.chat(
-                    with: models.llm,
+                    with: model,
                     context: await deduplicated,
                     settings: settings
                 )
@@ -488,6 +564,37 @@ private extension BotRunner {
         catch {
             print("⚠️ Failed to send generated reply: \(error)")
         }
+    }
+    
+    
+    /// Picks the model best suited to generate this particular turn.
+    ///
+    /// Two ideas combine here. First, interjections are commentary on the
+    /// conversation as a whole, not a focused response to one message.
+    /// Reaching for the vision model just because some old message in
+    /// history was a photo would burn its bigger latency on a turn that
+    /// isn't actually about the photo — so interjections always go
+    /// through the text LLM regardless of what's in history.
+    ///
+    /// Second, for direct responses, the question is whether the message
+    /// we're answering carries image data. If it does and a vision model
+    /// is configured, that's what we want. If no vision model is
+    /// configured, the text LLM is the only choice — the response will
+    /// be image-blind, which is a degraded but functional fallback.
+    private func modelForResponse(to context: [ChatMessage], inReplyTo: Int?) -> OllamaModel {
+        // Interjections aren't focused on any one message, so the bigger
+        // vision model isn't earned.
+        guard nil != inReplyTo else { return models.llm }
+        
+        let lastUserHasImages = context
+            .last(where: { .user == $0.role })?
+            .images?
+            .isEmpty == false
+        
+        if lastUserHasImages, let vision = models.vision {
+            return vision
+        }
+        return models.llm
     }
     
     

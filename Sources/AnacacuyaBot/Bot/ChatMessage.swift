@@ -35,10 +35,58 @@ public struct ChatMessage: Sendable {
     /// Whether this was a reply to another message
     let isReply: Bool
     
-    /// Raw text content. Trimmed of surrounding whitespace at the
-    /// boundary; the constructor trusts the caller not to pass empty
-    /// strings.
+    /// Textual content of the message. Trimmed of surrounding whitespace
+    /// at the boundary.
+    ///
+    /// May be empty when ``images`` is non-empty — a user sending a bare
+    /// photo with no caption produces a message with empty text and a
+    /// non-empty images array. Otherwise empty text indicates the
+    /// message wasn't worth recording, and the caller is expected to
+    /// guard against that case before constructing.
     let text: String
+    
+    /// Raw image bytes attached to this message, when the underlying
+    /// Telegram message carried photos and a vision model is configured
+    /// to consume them. Nil whenever the turn is text-only — which is
+    /// the case for the vast majority of messages, including every
+    /// outgoing message the bot itself sends.
+    ///
+    /// Stored as `Data` rather than a path or `URL` because the bot
+    /// downloads photos eagerly when they arrive and passes the bytes
+    /// directly to Ollama. There's no on-disk caching layer, and any
+    /// retry logic happens at the Telegram client level before this
+    /// field is populated.
+    ///
+    /// The array shape (rather than a single optional `Data`) mirrors
+    /// Ollama's chat-message wire format, which accepts multiple images
+    /// per turn. The bot currently only resolves one image per inbound
+    /// Telegram message, but the type leaves the door open for media-group
+    /// merging without an API change.
+    let images: [Data]?
+    
+    
+    /// Builds a `ChatMessage` with all fields specified explicitly.
+    ///
+    /// `images` defaults to `nil` because the overwhelming majority of
+    /// chat messages are text-only — system prompts, bot replies, plain
+    /// user text. Making image attachment opt-in via a default keeps the
+    /// common call site terse while preserving access for the
+    /// vision-handling path that does pass image bytes.
+    init(
+        id: TGMessage.ID?,
+        senderName: String,
+        role: Role,
+        isReply: Bool,
+        text: String,
+        images: [Data]? = nil,
+    ) {
+        self.id = id
+        self.senderName = senderName
+        self.role = role
+        self.isReply = isReply
+        self.text = text
+        self.images = images
+    }
 }
 
 
@@ -51,7 +99,11 @@ extension ChatMessage {
     ///   - incomingMessage: The original message sent from a Telegram user
     ///   - sender:          A pre-calculated pretty name for the sender
     ///   - wholeUserText:   The text of the message, already verified that it's non-empty
-    init(_ incomingMessage: TGMessage, sender: String, wholeUserText: String) {
+    ///   - images:          _optional_ - Raw bytes of any images attached to
+    ///                      the message, when the bot has resolved them.
+    ///                      Nil when the message is text-only or when the
+    ///                      bot couldn't download the photos.
+    init(_ incomingMessage: TGMessage, sender: String, wholeUserText: String, images: [Data]? = nil) {
         self.init(
             id: incomingMessage.id,
             senderName: sender,
@@ -59,7 +111,8 @@ extension ChatMessage {
                 ? .assistant
                 : .user,
             isReply: nil != incomingMessage.replyToMessage,
-            text: wholeUserText)
+            text: wholeUserText,
+            images: images)
     }
     
     
