@@ -22,21 +22,25 @@ public extension Ollama {
     ///                    Defaults to `true`.
     ///
     /// - Returns: The model that this function found, or `nil` if no such model could be found
-    func model(named modelName: String, pullIfMissing: Bool = true) async throws -> OllamaModel? {
+    func model(named modelName: ModelName, pullIfMissing: Bool = true) async throws -> OllamaModel? {
         let listedModel = try await listModels(.all)
             .models?
             .first(where: { $0.name == modelName || $0.model == modelName })
         
         if let listedModel {
-            let modelName = listedModel.name ?? listedModel.model ?? modelName
+            let modelName =
+                listedModel.name
+                ?? listedModel.model
+                ?? modelName
+            
             return OllamaModel(
                 name: modelName,
-                capabilities: try? await modelDetails(modelName: modelName).capabilities,
+                capabilities: try await modelDetails(modelName: modelName).capabilities,
             )
         }
         else {
             if pullIfMissing {
-                _ = try await pullModel(named: modelName)
+                _ = try await pullModel(named: modelName, timeout: .minutes(10))
                 return try await model(named: modelName, pullIfMissing: false)
             }
             else {

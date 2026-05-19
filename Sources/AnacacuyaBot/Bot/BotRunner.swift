@@ -75,12 +75,13 @@ extension BotRunner {
             throw BotError.failedToLoadLlm
         }
         
-        let visionModel: OllamaModel? = if let visionModelName = visionModelName?.nonEmptyOrNil {
-                try await ollama.model(named: visionModelName)
-            }
-            else {
-                nil
-            }
+        let visionModel: OllamaModel?
+        if let visionModelName {
+            visionModel = try await ollama.model(named: visionModelName)
+        }
+        else {
+            visionModel = nil
+        }
         
         print("🤖 Logged in as @\(username) | llm: \(llmModel)")
         
@@ -456,7 +457,16 @@ private extension BotRunner {
         let reply: String
         
         do {
-            reply = try await ollama.chat(with: models.llm, context: context, settings: settings)
+            async let deduplicated = context.deduplicated()
+            
+            reply = String(
+                try await ollama.chat(
+                    with: models.llm,
+                    context: await deduplicated,
+                    settings: settings
+                )
+                .removingFakeChatLogs()
+            )
         }
         catch {
             print("⚠️ Generation error: \(error)")

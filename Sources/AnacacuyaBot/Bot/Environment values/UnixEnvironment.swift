@@ -33,6 +33,20 @@ extension UnixEnvironment {
     
     
     /// Read the value of an environment variable
+    static subscript<Value>(_ pair: UnixEnvironmentKey<Value, Value>) -> Value {
+        get {
+            guard let raw = ProcessInfo.processInfo.environment[pair.rawValue],
+                  let parsed = pair.parse(raw)
+            else {
+                return pair.backup()
+            }
+            
+            return parsed
+        }
+    }
+    
+    
+    /// Read the value of an environment variable
     static subscript<Value>(_ pair: UnixEnvironmentKey<Value?, Value>) -> Value {
         get {
             guard let raw = ProcessInfo.processInfo.environment[pair.rawValue],

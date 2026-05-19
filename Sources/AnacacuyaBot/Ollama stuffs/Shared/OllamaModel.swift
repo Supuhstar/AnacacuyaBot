@@ -6,17 +6,31 @@
 //
 
 
+/// Represents a machine-learning model in Ollama
 public struct OllamaModel: OllamaResponse {
-    let name: String
+    
+    /// The name of the model
+    let name: ModelName
+    
+    /// Any known capabilities that the model has
     let capabilities: [ModelCapability]?
 }
 
 
 
+/// A known capability of a machine-learning model
 public enum ModelCapability: OllamaResponse {
-    case completion
+    
+    /// The model can complete text
+    case textCompletion
+    
+    /// The model can have a "thinking"/"reasoning" phase before composing its final output
     case thinking
+    
+    /// The model is capable of understanding images
     case vision
+    
+    /// A catchall for any capability not included in this enum
     case other(String)
 }
 
@@ -27,7 +41,7 @@ public extension ModelCapability {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         switch value {
-        case "completion": self = .completion
+        case "completion": self = .textCompletion
         case "thinking": self = .thinking
         case "vision": self = .vision
         default: self = .other(value)

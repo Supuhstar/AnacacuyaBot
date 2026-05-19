@@ -7,7 +7,7 @@
 
 
 
-extension UnixEnvironmentKey where Value == String?, Backup == String {
+extension UnixEnvironmentKey where Value == ModelName, Backup == ModelName {
     
     /// The name of the LLM model that the bot uses, like `"smollm2"`
     static let llmName = Self("OLLAMA_MODEL", backup: "smollm2")

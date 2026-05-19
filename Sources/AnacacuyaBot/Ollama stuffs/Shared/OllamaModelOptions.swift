@@ -9,7 +9,7 @@ import Foundation
 
 
 
-public struct OllamaModelOptions {
+public struct OllamaModelOptions: OllamaRequest {
     
     /// Random seed used for reproducible outputs
     let seed: Int?
@@ -27,7 +27,7 @@ public struct OllamaModelOptions {
     let min_p: Float?
     
     /// Stop sequences that will halt generation
-    let stop: String?
+    let stop: [String]?
     
     /// Context length size (number of tokens)
     let num_ctx: Int?
@@ -42,7 +42,7 @@ public struct OllamaModelOptions {
         top_k: Int? = nil,
         top_p: Float? = nil,
         min_p: Float? = nil,
-        stop: String? = nil,
+        stopSequences: [String]? = nil,
         num_ctx: Int? = nil,
         num_predict: Int? = nil,
     ) {
@@ -51,7 +51,7 @@ public struct OllamaModelOptions {
         self.top_k = top_k
         self.top_p = top_p
         self.min_p = min_p
-        self.stop = stop
+        self.stop = stopSequences
         self.num_ctx = num_ctx
         self.num_predict = num_predict
     }
@@ -61,6 +61,4 @@ public struct OllamaModelOptions {
 
 // MARK: - Conformances
 
-extension OllamaModelOptions: Codable {}
 extension OllamaModelOptions: Equatable {}
-extension OllamaModelOptions: Sendable {}

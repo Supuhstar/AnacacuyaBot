@@ -21,8 +21,8 @@ public extension Ollama {
     ///
     /// - Returns: Result status message
     func createModel(
-        named model: String,
-        from existingModel: String? = nil,
+        named model: ModelName,
+        from existingModel: ModelName? = nil,
         templatePrompt: String? = nil,
         license: [String]? = nil,
         systemPrompt: String? = nil,
@@ -47,15 +47,36 @@ public extension Ollama {
 
 
 
+/// Request body for `/api/create`.
+///
+/// `stream` is hardcoded to `false` because this current Swift code assumes a single response object per request.
 private struct OllamaCreateModelRequest: OllamaRequest {
-    let model: String
-    let from: String?
+    
+    /// Name for the model to create
+    let model: ModelName
+    
+    /// Existing model to create from
+    let from: ModelName?
+    
+    /// Prompt template to use for the model
     let template: String?
+    
+    /// License(s) for the model
     let license: [String]?
+    
+    /// System prompt to embed in the model
     let system: String?
+    
+    /// Key-value parameters for the model
     let parameters: JsonValue?
+    
+    /// Message history to use for the model
     let messages: [OllamaMessage]?
+    
+    /// Quantization level to apply
     let quantize: String?
+    
+    /// Stream status updates?
     let stream = false
 }
 
