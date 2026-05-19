@@ -32,6 +32,7 @@ struct PromptCommand: BotCommand {
                     in: .anyChat(type: chatType),
                     botUser: context.botUser,
                     inReplyTo: .init(context.commandMessage),
+                    capabilities: context.capabilities.subtracting([.textCompletion]),
                 )
             
             return """

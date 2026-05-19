@@ -71,17 +71,31 @@ struct Persona: Sendable {
     
     
     /// Composes the messages that you can send to Ollama to give the model all the context it needs for a response.
-    ///
+    /// 
     /// - Parameters:
     ///   - purpose:          Why is this context being sent to the model?
     ///   - chat:             The group/DMs/channel that the model will be responding inside
     ///   - botUser:          The Telegram user representing the bot. This will help inform exactly how to phrase the system prompt(s)
     ///   - repliedToMessage: If this will be for replying to a specific message, here you can specify which message the bot will be replying to.
     ///   - history:          Messages that the bot has previously seen. These will be present in the retuned array
+    ///   - capabilities:     The capabilities to tell the model it has
     ///
     /// - Returns: The messages that you can send to Ollama to give the model all the context it needs for a response to those messages. This includes the given historical messages, as well as system prompts as needed.
-    func contextMessages(for purpose: BotMessagePurpose, in chat: TGChat, botUser: TGUser, inReplyTo repliedToMessage: TGRepliedToMessage?, history: [ChatMessage]) -> [ChatMessage] {
-        let (earlier, later, tail) = systemPrompt(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+    func contextMessages(
+        for purpose: BotMessagePurpose,
+        in chat: TGChat,
+        botUser: TGUser,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+        history: [ChatMessage],
+        capabilities: Set<ModelCapability>,
+    ) -> [ChatMessage] {
+        let (earlier, later, tail) = systemPrompt(
+            for: purpose,
+            in: chat,
+            botUser: botUser,
+            inReplyTo: repliedToMessage,
+            capabilities: capabilities,
+        )
         return [earlier]
             + history
             + [
@@ -109,8 +123,16 @@ extension Persona {
         in chat: TGChat,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
+        capabilities: Set<ModelCapability>,
     ) -> PiecewiseSystemPrompt<ChatMessage> {
-        let (earlier, later, tail) = systemPromptStrings(for: purpose, in: chat, botUser: botUser, inReplyTo: repliedToMessage)
+        let (earlier, later, tail) = systemPromptStrings(
+            for: purpose,
+            in: chat,
+            botUser: botUser,
+            inReplyTo: repliedToMessage,
+            capabilities: capabilities,
+        )
+        
         return (
             earlier: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: earlier),
             later: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: later),
@@ -124,6 +146,7 @@ extension Persona {
         in chat: TGChat,
         botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
+        capabilities: Set<ModelCapability>,
     ) -> PiecewiseSystemPrompt<String> {
         let promptPrefix = switch chat.type {
             case .private:
@@ -146,14 +169,25 @@ extension Persona {
                 "You're broadcasting a public post in the Telegram channel \(chat.title ?? chat.username ?? "")".trimmingCharacters(in: .whitespacesAndNewlines)
             }
         
+        let targetAudience = switch chat.type {
+        case .private: "user"
+        case .channel: "channel subscribers"
+            
+        case .group, .supergroup:
+            switch purpose {
+            case .interjection: "group"
+            case .response: "user"
+            }
+        }
+        
         
         let generalPrompt = """
             \(promptPrefix)
             
             Current time: \(Date.now)
             
-            \(inEverySystemPrompt(botUser: botUser))
-            Send a short message to the group.
+            \(inEverySystemPrompt(botUser: botUser, capabilities: capabilities))
+            Send a short message to the \(targetAudience).
             """
         
         let specificPrompt = switch purpose {
@@ -165,7 +199,7 @@ extension Persona {
             }
         
         
-        var creatorNameContext: String? {
+        let creatorNameContext: String? =
             if let creator = UnixEnvironment[.creatorUsername] {
                 """
                 You were created by @\(creator) — this is who made your software.
@@ -174,7 +208,6 @@ extension Persona {
             else {
                 nil
             }
-        }
         
         
         var tailSystemPromptText: String {
@@ -206,7 +239,7 @@ extension Persona {
 
 private extension Persona {
     
-    func inEverySystemPrompt(botUser: TGUser) -> String {
+    func inEverySystemPrompt(botUser: TGUser, capabilities: Set<ModelCapability>) -> String {
         var preface = ""
         
         if let name {
@@ -229,6 +262,7 @@ private extension Persona {
             \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
             Whatever you say next will be the ENTIRE body of a message. Reply with ONLY YOUR message text. Remember who you are.
             You're allowed to use MarkdownV2.
+            \(capabilities.map(\.descriptionForLlmSystemPrompt).joined(separator: "\n"))
             """
     }
 }

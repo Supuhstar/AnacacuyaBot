@@ -202,6 +202,9 @@ public struct CommandContext: Sendable {
     
     /// Composes all the messages the bot saw when collecting context for its response
     let fullContextMessageHistory: @Sendable (BotMessagePurpose) async -> [ChatMessage]
+    
+    /// The current capabilities that the bot has
+    let capabilities: Set<ModelCapability>
 }
 
 

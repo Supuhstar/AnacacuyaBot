@@ -42,6 +42,9 @@ struct BotRunner: Sendable {
     /// messages. Resolved up front so a misconfigured token fails
     /// loudly at startup rather than silently on the first message.
     let botUsername: String
+    
+    /// The overall capabilities of the bot
+    var capabilities: Set<ModelCapability> = []
 }
 
 
@@ -102,6 +105,7 @@ extension BotRunner {
             ],
             limiter: BotLimiter(),
             botUsername: username,
+            capabilities: nil == visionModel ? [.textCompletion] : [.textCompletion, .vision],
         )
     }
     
@@ -221,7 +225,11 @@ private extension BotRunner {
         var state = await store.state(for: incomingMessage.chat)
         
         
-        if let commandResult = try await runAsCommand(wholeUserText, incomingMessage: incomingMessage, chatState: &state) {
+        if let commandResult = try await runAsCommand(
+            wholeUserText,
+            incomingMessage: incomingMessage,
+            chatState: &state,
+        ) {
             log(info: "Command result: \(commandResult)")
             
             switch commandResult {
@@ -315,16 +323,20 @@ private extension BotRunner {
     
     
     /// Attempts to run the given whole user text as a command.
-    ///
+    /// 
     /// If the given text cannot be parsed as a command, then no command is run and this returns `.none`
-    ///
+    /// 
     /// - Parameters:
-    ///   - wholeUserText: The raw text straight from the Telegram user sending a message to this bot
-    ///   - userMessage:   The whole message the user sent, including metadata
-    ///   - state:         The state of the chat in which this command would be run
+    ///   - wholeUserText:   The raw text straight from the Telegram user sending a message to this bot
+    ///   - incomingMessage: The whole message the user sent, including metadata
+    ///   - state:           The state of the chat in which this command would be run
     ///
     /// - Returns: The result of running the command, or `.none` if a well-formed command couldn't be parsed out of `wholeUserText`
-    private func runAsCommand(_ wholeUserText: String, incomingMessage: TGMessage, chatState state: inout ChatState) async throws -> CommandRunResult? {
+    private func runAsCommand(
+        _ wholeUserText: String,
+        incomingMessage: TGMessage,
+        chatState state: inout ChatState,
+    ) async throws -> CommandRunResult? {
         if let command = commands.first(where: { type(of: $0).matches(wholeUserText, as: botUser) }),
            let parsedCommand = type(of: command).parsing(wholeUserText, as: botUser)
         {
@@ -343,6 +355,7 @@ private extension BotRunner {
                         )
                         .context
                     },
+                    capabilities: capabilities,
                 )
             
             for response in try await command.run(arguments: arguments, remainingText: wholeUserText, context: commandContext) {
@@ -366,7 +379,12 @@ private extension BotRunner {
     ///   - incomingMessage:                 The original message from Telegram, like if a user mentions or replies to this bot's message.
     ///   - userExplicitlyRequestedResponse: Whether the bot should respond directly to the incoming message. `false` indicates that the bot may choose to send a standalone message instead.
     ///   - repliedToMessage:                If there's a specific message that the bot should respond to, put that here
-    private func sendLlmMessage(chatState state: inout ChatState, incomingMessage: ChatMessage, userExplicitlyRequestedResponse: Bool, inReplyTo repliedToMessage: TGRepliedToMessage?) async {
+    private func sendLlmMessage(
+        chatState state: inout ChatState,
+        incomingMessage: ChatMessage,
+        userExplicitlyRequestedResponse: Bool,
+        inReplyTo repliedToMessage: TGRepliedToMessage?,
+    ) async {
         // Uncomment when you're testing in production:
 //        try? await send(message: "😴💤 [I'm in maintenance mode]", inChat: state.chat.id, replyingTo: incomingMessage.id, chatState: &state); return
         
@@ -519,7 +537,14 @@ internal extension BotRunner {
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async -> (context: [ChatMessage], settings: OllamaModelOptions?) {
         let history = await state.recentMessages
-        let context = persona.contextMessages(for: purpose, in: state.chat, botUser: botUser, inReplyTo: repliedToMessage, history: history)
+        let context = persona.contextMessages(
+            for: purpose,
+            in: state.chat,
+            botUser: botUser,
+            inReplyTo: repliedToMessage,
+            history: history,
+            capabilities: capabilities,
+        )
         let settings = persona.modelSettings
         return (context: context, settings: settings)
     }
