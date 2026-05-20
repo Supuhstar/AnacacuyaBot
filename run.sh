@@ -149,7 +149,7 @@ if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
     elif [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
         # Keyring exists but no entry yet — offer to save
         echo "No token found in keyring for @${TELEGRAM_BOT}."
-        read -rs "?Paste your bot token here to store it securely: " new_token
+        read -rsp "Paste your bot token here to store it securely: " new_token
         echo
         storeToken "$new_token" || exit $?
         TELEGRAM_BOT_TOKEN="$new_token"
