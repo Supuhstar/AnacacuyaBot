@@ -14,10 +14,13 @@ This will talk in DMs, respond to any mentions/replies to it, and randomly send 
 3. Get your bot's token from [@BotFather](https://t.me/BotFather): /token  → your bot
 4. Set environment variables
     ```bash
-    export TELEGRAM_BOT_TOKEN="hrgailrhjfirnnenmocuesznclizejjsnfzdls"
+    # required:
+    export TELEGRAM_BOT="AnacacuyaBot" # set this to the username of your bot
+    
+    # optional:
     export OLLAMA_BASE_URL="http://localhost:11434" # optional, this is the default 
     export OLLAMA_MODEL="smollm2" # optional, this is the default
-    export OLLAMA_VISION_MODEL="moondream" # optional, this is the default. Ignored on OSs with built-in vision models
+    export OLLAMA_VISION_MODEL="moondream" # optional, default is no vision model
     export CREATOR_USERNAME="KyNorthstar" # optional, your Telegram username. Omitted by default.
     ```
 
