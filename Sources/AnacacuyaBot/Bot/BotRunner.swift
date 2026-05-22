@@ -63,9 +63,19 @@ extension BotRunner {
             throw BotError.missingToken
         }
         
-        let telegram = try await TelegramClient(token: token)
-        let me = telegram.botUser
-        guard let username = me.username else {
+        let telegram = TelegramClient(token: token)
+        
+        do {
+            try await Task { @MainActor in
+                TGUser.botUser = try await telegram.getMe()
+            }.value // stupid hack to get this function to wait for getMe() to save into botUser
+        }
+        catch {
+            log(error: error)
+            throw BotError.invalidToken
+        }
+        
+        guard let username = await TGUser.botUser.username else {
             throw BotError.noUsername
         }
         
@@ -119,11 +129,6 @@ extension BotRunner {
             group.addTask { await self.listenForAllMessages() }
             group.addTask { await self.runTimeBasedInterjector() }
         }
-    }
-    
-    
-    var botUser: TGUser {
-        telegram.botUser
     }
 }
 
@@ -208,15 +213,19 @@ private extension BotRunner {
             }
             return
         }
-
         
-        let sender = incomingMessage.from?.nameForLlm ?? "someone"
+        
+        guard let sender = incomingMessage.from else {
+            log(warning: "🫥  Refusing to process message from unknown user.")
+            return
+        }
+        let senderName = await sender.nameForLlm
         let userExplicitlyRequestedResponse = didUserExplicitlyRequestResponse(to: incomingMessage)
         
         log(info: [
                 userExplicitlyRequestedResponse ? "👀" : " ",
                 "[\(incomingMessage.chat.title ?? incomingMessage.chat.username ?? "?")]",
-                "\(sender)\(receivedImages.isEmpty ? "" : " 🖼️"):",
+                "\(senderName)\(receivedImages.isEmpty ? "" : " 🖼️"):",
                 wholeUserText
             ]
             .joined(separator: " ")
@@ -337,6 +346,7 @@ private extension BotRunner {
         incomingMessage: TGMessage,
         chatState state: inout ChatState,
     ) async throws -> CommandRunResult? {
+        let botUser = await TGUser.botUser
         if let command = commands.first(where: { type(of: $0).matches(wholeUserText, as: botUser) }),
            let parsedCommand = type(of: command).parsing(wholeUserText, as: botUser)
         {
@@ -345,12 +355,10 @@ private extension BotRunner {
             let commandContext = CommandContext(
                     persona: persona,
                     commandMessage: incomingMessage,
-                    botUser: telegram.botUser,
                     fullContextMessageHistory: { [state] purpose in
                         await contextMessages(
                             for: purpose,
                             state: state,
-                            botUser: botUser,
                             inReplyTo: incomingMessage.replyToMessage
                         )
                         .context
@@ -456,7 +464,7 @@ private extension BotRunner {
         
         await state.register(didSendMessage: ChatMessage(
             id: nil,
-            senderName: botUsername,
+            sender: await .botUser,
             role: .assistant,
             isReply: nil != repliedToMessage,
             text: message)
@@ -535,14 +543,12 @@ internal extension BotRunner {
     func contextMessages(
         for purpose: BotMessagePurpose,
         state: ChatState,
-        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async -> (context: [ChatMessage], settings: OllamaModelOptions?) {
         let history = await state.recentMessages
-        let context = persona.contextMessages(
+        let context = await persona.contextMessages(
             for: purpose,
             in: state.chat,
-            botUser: botUser,
             inReplyTo: repliedToMessage,
             history: history,
             capabilities: capabilities,
@@ -563,7 +569,7 @@ private extension BotRunner {
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         state: inout ChatState,
     ) async {
-        let (context, settings) = await contextMessages(for: .response, state: state, botUser: botUser, inReplyTo: repliedToMessage)
+        let (context, settings) = await contextMessages(for: .response, state: state, inReplyTo: repliedToMessage)
         await sendGeneratedResponse(context: context, settings: settings, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
     }
     
@@ -575,7 +581,7 @@ private extension BotRunner {
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         state: inout ChatState,
     ) async {
-        let (context, settings) = await contextMessages(for: .interjection, state: state, botUser: botUser, inReplyTo: repliedToMessage)
+        let (context, settings) = await contextMessages(for: .interjection, state: state, inReplyTo: repliedToMessage)
         
         
         await sendGeneratedResponse(
@@ -620,17 +626,8 @@ private extension BotRunner {
             return
         }
         
-        let recentSenders = await state.recentMessages
-            .filter { .assistant != $0.role }
-            .map(\.senderName)
-        let cleaned = persona.sanitize(
-            reply,
-            botUsername: botUsername,
-            knownSenders: recentSenders
-        )
-        
         do {
-            try await send(message: cleaned, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
+            try await send(message: reply, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
         }
         catch {
             log(error: error, "Failed to send generated reply")
@@ -681,6 +678,7 @@ private extension BotRunner {
     /// operator must address; retrying won't help.
     enum BotError: Error {
         case missingToken
+        case invalidToken
         case noUsername
         case failedToLoadLlm
     }

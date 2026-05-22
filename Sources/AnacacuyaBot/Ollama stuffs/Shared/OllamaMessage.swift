@@ -20,10 +20,10 @@ public struct OllamaMessage: OllamaTranceivable {
 
 
 public extension OllamaMessage {
-    init(_ chatMessage: ChatMessage) {
+    init(_ chatMessage: ChatMessage) async {
         self.init(
             role: chatMessage.role,
-            content: chatMessage.contentForLlm,
+            content: await chatMessage.contentForLlm,
             images: chatMessage.images?.map(\.rawData)
         )
     }

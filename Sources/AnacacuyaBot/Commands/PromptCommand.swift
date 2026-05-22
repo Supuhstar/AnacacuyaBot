@@ -25,12 +25,11 @@ struct PromptCommand: BotCommand {
     
     func run(arguments _: [BotCommandArgument], remainingText _: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
         
-        func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) -> String {
-            let (earlier, later, tail) = context.persona
+        func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) async -> String {
+            let (earlier, later, tail) = await context.persona
                 .systemPromptStrings(
                     for: purpose,
                     in: .anyChat(type: chatType),
-                    botUser: context.botUser,
                     inReplyTo: .init(context.commandMessage),
                     capabilities: context.capabilities.subtracting([.textCompletion]),
                 )
@@ -47,19 +46,19 @@ struct PromptCommand: BotCommand {
         }
         
         return [
-            .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
+            .message(.system(text: """
                 __*When interjecting in a group:*__
-                \(systemPrompt(for: .interjection, in: .group))
+                \(await systemPrompt(for: .interjection, in: .group))
                 """)),
             
-                .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
+                .message(.system(text: """
                 __*When replying in a group:*__
-                \(systemPrompt(for: .response, in: .group))
+                \(await systemPrompt(for: .response, in: .group))
                 """)),
             
-                .message(.init(id: nil, senderName: "", role: .system, isReply: false, text: """
+                .message(.system(text: """
                 __*When replying in DMs:*__
-                \(systemPrompt(for: .response, in: .private))
+                \(await systemPrompt(for: .response, in: .private))
                 """)),
         ]
     }

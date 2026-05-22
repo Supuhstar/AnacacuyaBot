@@ -84,15 +84,13 @@ struct Persona: Sendable {
     func contextMessages(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
-        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         history: [ChatMessage],
         capabilities: Set<ModelCapability>,
-    ) -> [ChatMessage] {
-        let (earlier, later, tail) = systemPrompt(
+    ) async -> [ChatMessage] {
+        let (earlier, later, tail) = await systemPrompt(
             for: purpose,
             in: chat,
-            botUser: botUser,
             inReplyTo: repliedToMessage,
             capabilities: capabilities,
         )
@@ -121,22 +119,22 @@ extension Persona {
     func systemPrompt(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
-        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         capabilities: Set<ModelCapability>,
-    ) -> PiecewiseSystemPrompt<ChatMessage> {
-        let (earlier, later, tail) = systemPromptStrings(
+    ) async -> PiecewiseSystemPrompt<ChatMessage> {
+        let (earlier, later, tail) = await systemPromptStrings(
             for: purpose,
             in: chat,
-            botUser: botUser,
             inReplyTo: repliedToMessage,
             capabilities: capabilities,
         )
         
+        let isReply = nil != repliedToMessage
+        
         return (
-            earlier: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: earlier),
-            later: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: later),
-            tail: .init(id: nil, senderName: "", role: .system, isReply: nil != repliedToMessage, text: tail),
+            earlier: .system(isReply: isReply, text: earlier),
+            later: .system(isReply: isReply, text: later),
+            tail: .system(isReply: isReply, text: tail),
         )
     }
     
@@ -144,10 +142,9 @@ extension Persona {
     func systemPromptStrings(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
-        botUser: TGUser,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         capabilities: Set<ModelCapability>,
-    ) -> PiecewiseSystemPrompt<String> {
+    ) async -> PiecewiseSystemPrompt<String> {
         let promptPrefix = switch chat.type {
             case .private:
                 "You're sending a DM to \(chat.username ?? "a user")."
@@ -161,7 +158,7 @@ extension Persona {
                     
                 case .response:
                     """
-                    You're responding to \(repliedToMessage?.from?.nameForLlm ?? "someone") in \(chat.title ?? chat.username ?? "a group chat").
+                    You're responding to \(await (repliedToMessage?.from).nameForLlm) in \(chat.title ?? chat.username ?? "a group chat").
                     """
                 }
                 
@@ -186,7 +183,7 @@ extension Persona {
             
             Current time: \(Date.now)
             
-            \(inEverySystemPrompt(botUser: botUser, capabilities: capabilities))
+            \(await inEverySystemPrompt(capabilities: capabilities))
             Send a short message to the \(targetAudience).
             """
         
@@ -239,7 +236,8 @@ extension Persona {
 
 private extension Persona {
     
-    func inEverySystemPrompt(botUser: TGUser, capabilities: Set<ModelCapability>) -> String {
+    @MainActor
+    func inEverySystemPrompt(capabilities: Set<ModelCapability>) -> String {
         var preface = ""
         
         if let name {
@@ -259,89 +257,10 @@ private extension Persona {
         }
         
         return """
-            \(preface)Your username is @\(botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
+            \(preface)Your username is @\(TGUser.botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
             Whatever you say next will be the ENTIRE body of a message. Reply with ONLY YOUR message text. Remember who you are.
             You're allowed to use MarkdownV2.
             \(capabilities.map(\.descriptionForLlmSystemPrompt).joined(separator: "\n"))
             """
     }
 }
-
-
-
-// MARK: - Sanitization
-
-extension Persona {
-    /// Strips formatting artifacts the model picks up from the
-    /// transcript shape we feed it. Small models tend to mirror the
-    /// "Name: text" structure they see in their context — sometimes
-    /// echoing "AnacacuyaBot: hi back" or "KyNorthstar: hi back" as
-    /// their own reply, depending on which speaker label they latched
-    /// onto.
-    ///
-    /// To use, call once on each completion before treating it as a
-    /// message. Pass the bot's own username and the set of human
-    /// sender names visible in the history that produced this
-    /// completion. The function trims surrounding whitespace and
-    /// strips a single matching prefix; non-matching output passes
-    /// through unchanged.
-    ///
-    /// Stripping is deliberately conservative. Rather than a generic
-    /// `^\w+:` match — which would chew through legitimate prose like
-    /// "Honestly: yes" at message start — only prefixes corresponding
-    /// to known speakers are removed. The match allows an optional
-    /// leading `@` (covering both `Name:` and `@Name:` forms), is
-    /// case-insensitive, and consumes any whitespace following the
-    /// colon. Names are tried longest-first so a longer match wins
-    /// over a shorter one that happens to be a prefix of it.
-    func sanitize(
-        _ raw: String,
-        botUsername: String,
-        knownSenders: some Collection<String>
-    ) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let candidates = (Array(knownSenders) + [botUsername])
-            .filter { false == $0.isEmpty }
-            .sorted { $0.count > $1.count }
-            .map { NSRegularExpression.escapedPattern(for: $0) }
-
-        guard false == candidates.isEmpty else { return trimmed }
-
-        let pattern = "^@?(?:\(candidates.joined(separator: "|"))):\\s*"
-        guard let regex = try? NSRegularExpression(
-            pattern: pattern,
-            options: [.caseInsensitive]
-        ) else {
-            return trimmed
-        }
-
-        let range = NSRange(trimmed.startIndex..., in: trimmed)
-        let stripped = regex.stringByReplacingMatches(
-            in: trimmed,
-            range: range,
-            withTemplate: ""
-        )
-        return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-
-
-//extension ChatMessage {
-//    init(_ telegramMessage: ChatMessage) {
-//        let role: ChatMessage.Role = telegramMessage.role
-//        let content = switch role {
-//            case .system:
-//                "[SYSTEM: \(telegramMessage.text)]"
-//                
-//            case .assistant:
-//                telegramMessage.text
-//                
-//            case .user:
-//                "\(telegramMessage.senderName): \(telegramMessage.text)"
-//            }
-//            
-//        self.init(senderName: <#T##String#>, text: <#T##String#>, role: <#T##Role#>, isReply: <#T##Bool#>)
-//    }
-//}

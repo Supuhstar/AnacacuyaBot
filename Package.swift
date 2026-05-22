@@ -15,7 +15,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.4"),
         
         .package(url: "https://github.com/RougeWare/Swift-Collection-Tools.git", from: "3.2.1"),
-        .package(url: "https://github.com/RougeWare/Swift-Rectangle-Tools", from: "2.17.1"),
+        .package(url: "https://github.com/RougeWare/Swift-Rectangle-Tools", from: "2.18.0"),
         .package(url: "https://github.com/RougeWare/Swift-SemVer.git", from: "2.0.0"),
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
         .package(url: "https://github.com/RougeWare/Swift-Simple-Logging", .upToNextMinor(from: "0.6.0-Beta.3")),
@@ -38,11 +38,12 @@ let package = Package(
                 .product(name: "SpecialString", package: "Swift-Special-String"),
             ],
             swiftSettings: [
+                .defaultIsolation(nil),
                 .strictMemorySafety(),
                 .treatAllWarnings(as: .error),
                 .unsafeFlags([
                     "-enable-bare-slash-regex",
-                ])
+                ]),
             ],
         ),
         .testTarget(

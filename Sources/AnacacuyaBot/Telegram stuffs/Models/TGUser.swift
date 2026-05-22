@@ -34,13 +34,19 @@ public struct TGUser: Decodable, Sendable {
 extension TGUser {
     
     /// A display name suitable for inclusion in an LLM prompt context.
-    ///
+    /// 
     /// The bot's transcripts use this when serializing speaker labels. Picking
     /// a single canonical spelling per user keeps the same person from
     /// appearing under multiple aliases across messages, which would confuse
     /// small models that pattern-match on speaker names.
+    ///
+    /// - Returns: This user's name, appropriate to give to an LLM to describe its relationship to them
+    @MainActor
     var nameForLlm: String {
-        if let username {
+        if TGUser.botUser.id == id {
+            "you"
+        }
+        else if let username {
             "\(firstName) (@\(username))"
         }
         else if firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -49,5 +55,23 @@ extension TGUser {
         else {
             firstName
         }
+    }
+}
+
+
+
+extension TGUser? {
+    
+    /// A display name suitable for inclusion in an LLM prompt context.
+    ///
+    /// The bot's transcripts use this when serializing speaker labels. Picking
+    /// a single canonical spelling per user keeps the same person from
+    /// appearing under multiple aliases across messages, which would confuse
+    /// small models that pattern-match on speaker names.
+    ///
+    /// - Returns: This user's name, appropriate to give to an LLM to describe its relationship to them, or a placeholder if the user is unknown
+    @MainActor
+    var nameForLlm: String {
+        self?.nameForLlm ?? "someone"
     }
 }

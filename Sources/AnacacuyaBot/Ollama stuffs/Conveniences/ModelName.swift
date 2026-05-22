@@ -47,6 +47,7 @@ public struct ModelName: Sendable {
 private nonisolated(unsafe) let regex = /^(?:(?<namespace>[^\/:]+?)\/)?(?<name>[^\/:]+?)(?::(?<tag>[^\/:]+))?$/
 
 
+
 extension ModelName: LosslessStringConvertible {
     
     /// Attempts to parse the given string as a qualified model name.

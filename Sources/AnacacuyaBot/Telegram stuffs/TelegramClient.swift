@@ -49,33 +49,14 @@ actor TelegramClient {
     /// on the next call; lower values would replay updates already handled.
     private var offset: Int = 0
     
-    /// The bot's own account information, fetched once at startup. Used by
-    /// dispatcher logic to detect when a message mentions or replies to the bot.
-    public let botUser: TGUser
     
-    
-    init(token: TelegramBotToken) async throws {
+    init(token: TelegramBotToken) {
         let raw = token.withoutTypeSafety()
         let base = "https://api.telegram.org/bot\(raw)"
         let fileBase = "https://api.telegram.org/file/bot\(raw)"
         
         self.base = base
         self.fileBase = fileBase
-        
-        // `getMe` runs during initialization, before `self` is fully constructed,
-        // so it can't go through the actor's helpers — those depend on stored
-        // properties being available through `self`. The inline bootstrap is
-        // equivalent to one round of `get("getMe")` and self-contained.
-        let url = URL(string: "\(base)/getMe")!
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try TGResponse<TGUser>(jsonData: data, keyDecodingStrategy: keyDecodingStrategy)
-        guard response.ok, let user = response.result else {
-            throw TelegramHttpError.apiError(
-                code: response.errorCode,
-                description: response.description
-            )
-        }
-        self.botUser = user
     }
 }
 
@@ -84,6 +65,14 @@ actor TelegramClient {
 // MARK: - API
 
 extension TelegramClient {
+    
+    /// Retrieves the Telegram user account that the bot is operating within.
+    ///
+    /// This should always work as long as our token is correct. If this fails, that means we are unable to connect to Telegram's servers or the token is invalid.
+    func getMe() async throws -> TGUser {
+        try await self.get("getMe")
+    }
+    
     
     /// Receives the next batch of updates from Telegram's long-polling stream.
     ///
@@ -236,18 +225,18 @@ private extension TelegramClient {
     /// structured bodies should use ``post(_:_:)`` instead.
     ///
     /// - Parameters:
-    ///   - method:     The Bot API method name (e.g. `"getUpdates"`).
+    ///   - endpoint:     The Bot API method name (e.g. `"getUpdates"`).
     ///   - queryItems: Parameters as query string entries. Default empty.
     ///
     /// - Returns: The result payload unwrapped from Telegram's `{ok, result}`
     ///            envelope. Throws if the envelope's `ok` is false or the
     ///            payload can't be decoded.
     func get<Response: Decodable & Sendable>(
-        _ method: String,
+        _ endpoint: String,
         queryItems: [URLQueryItem] = [],
         receiving _: Response.Type = Response.self,
     ) async throws -> Response {
-        var comps = URLComponents(string: "\(base)/\(method)")!
+        var comps = URLComponents(string: "\(base)/\(endpoint)")!
         if false == queryItems.isEmpty {
             comps.queryItems = queryItems
         }

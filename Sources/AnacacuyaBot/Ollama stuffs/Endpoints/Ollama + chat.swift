@@ -7,6 +7,8 @@
 
 import Foundation
 
+import AsyncAlgorithms
+
 
 
 public extension Ollama {
@@ -124,7 +126,7 @@ public extension Ollama {
     ) async throws -> String {
         try await chat(
             with: model,
-            context: context.map(OllamaMessage.init),
+            context: await context.async.map(OllamaMessage.init).collect(),
             settings: settings,
         )
     }

@@ -24,8 +24,8 @@ public struct ChatMessage: Sendable {
     /// The ID of the original Telegram message this represents, if it came from Telegram
     let id: TGMessage.ID?
     
-    /// Display name of whoever sent this message.
-    let senderName: String
+    /// Whoever sent this message.
+    let sender: TGUser
     
     /// Distinguishes the bot's own utterances from human participants and system messages.
     /// Drives role assignment when building prompts and exempts bot
@@ -56,14 +56,14 @@ public struct ChatMessage: Sendable {
     /// `images` defaults to `nil` because the common case is text-only messages (user messages to each other, system prompts, bot replies, etc.). Making image attachment opt-in via a default keeps the common call site terse while preserving access for the vision-handling path that does pass image bytes.
     init(
         id: TGMessage.ID?,
-        senderName: String,
+        sender: TGUser,
         role: Role,
         isReply: Bool,
         text: String,
         images: [ProcessedImage]? = nil,
     ) {
         self.id = id
-        self.senderName = senderName
+        self.sender = sender
         self.role = role
         self.isReply = isReply
         self.text = text
@@ -83,10 +83,10 @@ extension ChatMessage {
     ///   - wholeUserText:   The text of the message, already verified that it's non-empty
     ///   - images:          _optional_ - Any images attached to the message, when the bot has resolved & processed them.
     ///                      Nil when the message is text-only or when the bot couldn't download the photos.
-    init(_ incomingMessage: TGMessage, sender: String, wholeUserText: String, images: [ProcessedImage]? = nil) {
+    init(_ incomingMessage: TGMessage, sender: TGUser, wholeUserText: String, images: [ProcessedImage]? = nil) {
         self.init(
             id: incomingMessage.id,
-            senderName: sender,
+            sender: sender,
             role: (incomingMessage.from?.isBot ?? false)
                 ? .assistant
                 : .user,
@@ -110,6 +110,7 @@ extension ChatMessage {
     }
     
     
+    @MainActor
     var contentForLlm: String {
         switch role {
         case .system:
@@ -117,7 +118,7 @@ extension ChatMessage {
             
         case .assistant, .user:
             """
-            \(senderName):
+            \(sender.nameForLlm):
             \(textForLlm)
             """
         }
@@ -182,5 +183,16 @@ extension ChatMessage {
         
         /// The message was manually sent by a meatspace user
         case user
+    }
+}
+
+
+
+// MARK: - Systemic conveniences
+
+extension ChatMessage {
+    
+    static func system(isReply: Bool = false, text: String, images: [ProcessedImage]? = nil) -> Self {
+        .init(id: nil, sender: .system, role: .system, isReply: isReply, text: text, images: images)
     }
 }

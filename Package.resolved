@@ -1,5 +1,5 @@
 {
-  "originHash" : "aab2972364d09affe00770e93cca8cebeb06d4a3b365df3e5d8ab69a99957eca",
+  "originHash" : "239898e7c0b3bb046d0b29549846b1aaa6d983418c533c69538a5f16b8f06383",
   "pins" : [
     {
       "identity" : "swift-async-algorithms",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RougeWare/Swift-MultiplicativeArithmetic.git",
       "state" : {
-        "revision" : "c45199953ac680dfdcaefff5f8743f1126fe8a4e",
-        "version" : "2.0.1"
+        "revision" : "960ccc54d6c876983c6658d4aca637b4685e9841",
+        "version" : "2.1.0"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RougeWare/Swift-Rectangle-Tools",
       "state" : {
-        "revision" : "dd8eba41360e39c74159d7a1ef9496efc6fefc40",
-        "version" : "2.17.1"
+        "revision" : "146dd37c698a7c16c00e881e27ffd0f27956167c",
+        "version" : "2.18.0"
       }
     },
     {

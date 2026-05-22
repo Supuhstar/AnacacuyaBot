@@ -35,14 +35,7 @@ public extension Substring {
     /// Sorry about that, @ninedd. We were discussing running openclaw on my macbook pro, and it seems like you joined in right as we were starting our chat!
     /// ```
     func removingFakeChatLogs() -> Substring {
-        // The regex which identifies a fake chat log message and isolates the part to keep:
-        let regex = /^(?<keep>.+?)(?:\n+ *)+(?<fakeChatLog>.+? \(@\w+\):\n.+)+$/
-        
-        if let match = try? regex.firstMatch(in: self) {
-            return match.output.keep
-        }
-        else {
-            return self[...]
-        }
+        isolate(by: /^(?<keep>.+?)(?:\n+ *)+(?<fakeChatLog>.+? \(@\w+\):\n.+)+$/,
+                keeping: \.keep)
     }
 }

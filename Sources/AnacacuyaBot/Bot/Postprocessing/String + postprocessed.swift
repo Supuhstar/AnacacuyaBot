@@ -29,5 +29,28 @@ public extension Substring {
     func postprocessed() -> Substring {
         self.removingFakeChatLogs()
             .removingWholeMessageQuotes()
+            .removingFilenameTag()
+            .removingSelfIntroduction()
+    }
+}
+
+
+
+internal extension Substring {
+    
+    /// Isolates part of this substring by matching against the given regex, only keeping the given capture
+    ///
+    /// - Parameters:
+    ///   - regex:       A regex which can isolate part of this substring
+    ///   - keptCapture: The captured substring to keep
+    ///
+    /// - Returns: The substring captured by `keptCapture`
+    func isolate<R: RegexComponent>(by regex: R, keeping keptCapture: KeyPath<R.RegexOutput, Substring>) -> Substring {
+        if let match = self.firstMatch(of: regex) {
+            return match.output[keyPath: keptCapture]
+        }
+        else {
+            return self
+        }
     }
 }

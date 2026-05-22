@@ -197,9 +197,6 @@ public struct CommandContext: Sendable {
     /// The full original message the user sent when running this command, as fetched from the Telegram API
     let commandMessage: TGMessage
     
-    /// The user that represents the bot, as fetched from the Telegram API
-    let botUser: TGUser
-    
     /// Composes all the messages the bot saw when collecting context for its response
     let fullContextMessageHistory: @Sendable (BotMessagePurpose) async -> [ChatMessage]
     
