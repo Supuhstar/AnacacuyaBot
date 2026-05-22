@@ -7,6 +7,8 @@
 
 import Foundation
 
+import SimpleLogging
+
 
 
 public extension Ollama {
@@ -39,8 +41,10 @@ public extension Ollama {
             )
         }
         else {
+            log(info: "Model `\(modelName)` not found. Pulling...")
             if pullIfMissing {
                 _ = try await pullModel(named: modelName, timeout: .minutes(10))
+                log(info: "Pulled")
                 return try await model(named: modelName, pullIfMissing: false)
             }
             else {
