@@ -105,7 +105,7 @@ extension ChatMessage {
     private var isBot: Bool {
         switch role {
         case .assistant: return true
-        case .system, .user: return false
+        case .system, .user, .tool: return false
         }
     }
     
@@ -115,7 +115,13 @@ extension ChatMessage {
         switch role {
         case .system:
             textForLlm
-            
+        
+        case .tool:
+            """
+            \(sender.nameForLlm) result:
+            \(text)
+            """
+        
         case .assistant, .user:
             """
             \(sender.nameForLlm):
@@ -183,6 +189,9 @@ extension ChatMessage {
         
         /// The message was manually sent by a meatspace user
         case user
+        
+        /// The message is the result of a tool being run
+        case tool
     }
 }
 

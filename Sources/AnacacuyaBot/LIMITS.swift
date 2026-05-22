@@ -13,6 +13,16 @@ enum Limits {}
 
 
 
+// MARK: - Agentic limits
+
+extension Limits {
+    
+    /// How many times should the bot be allowed to use a tool as the result of using another tool?
+    static let maxSelfInteractions = 3
+}
+
+
+
 // MARK: - Interaction limits
 
 extension Limits {

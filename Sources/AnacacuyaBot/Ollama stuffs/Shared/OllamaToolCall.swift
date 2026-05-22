@@ -18,6 +18,6 @@ extension OllamaToolCall {
         let name: String
         let parameters: JsonSchema
         var description: String?
-        var arguments: [JsonValue]?
+        var arguments: [String : JsonValue]?
     }
 }

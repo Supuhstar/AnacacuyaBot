@@ -42,6 +42,9 @@ public enum ModelCapability: OllamaResponse, Equatable, Hashable {
     /// The model can have a "thinking"/"reasoning" phase before composing its final output
     case thinking
     
+    /// The model can use tools/skills
+    case tools
+    
     /// The model is capable of understanding images
     case vision
     
@@ -71,6 +74,7 @@ extension ModelCapability: CustomStringConvertible {
         switch self {
         case .textCompletion:   "text completion"
         case .thinking:         "thinking"
+        case .tools:            "tools"
         case .vision:           "vision"
         case .other(let other): other
         }
@@ -82,6 +86,7 @@ extension ModelCapability: CustomStringConvertible {
         switch self {
         case .textCompletion:   "You can talk directly to use the user in text."
         case .thinking:         "You can take time to think before talking to the user."
+        case .tools:            "You can call any of various tools."
         case .vision:           "You can see images."
         case .other(let other): "You have the \(other) capability."
         }

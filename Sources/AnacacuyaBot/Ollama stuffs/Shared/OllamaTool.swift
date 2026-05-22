@@ -13,13 +13,18 @@
 ///
 /// - Note: The model can decide whether & when to call this tool. All we do is describe what's available to it, and what shape the tool's arguments take
 public struct OllamaTool: OllamaRequest {
-    let type: Kind
-    let function: Function
+    public let type: Kind
+    public let function: Function
+    
+    init(type: Kind = .function, function: Function) {
+        self.type = type
+        self.function = function
+    }
 }
 
 
 
-extension OllamaTool {
+public extension OllamaTool {
     
     /// The kind of tool being declared.
     ///
@@ -33,16 +38,16 @@ extension OllamaTool {
     /// A function that a LLM can use as a tool.
     struct Function: OllamaRequest {
         /// An arbitrary name for this tool . Keep it short, like `"search"` or `"get_current_weather"`.
-        let name: String
+        public let name: String
         
         /// A longer-form plaintext description of this tool, like `"Perform a web search"` or `"Get the current weather for a location"`.
-        let description: String
+        public let description: String
         
         /// An object schema describing the whole shape of the function's parameters.
         ///
         /// This is just one `.object(...)`.
         ///
         /// Top level keys are the names of the parameters, associated with their expected inputs.
-        let parameters: JsonSchema
+        public let parameters: JsonSchema
     }
 }

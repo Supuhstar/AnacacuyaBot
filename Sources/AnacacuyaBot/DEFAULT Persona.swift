@@ -30,9 +30,10 @@ extension Persona {
         
         interjectionSystemPrompt: """
             You are a demo Telegram bot. Say something unrelated to this conversation.
-            """)
+            """,
+            tools: [.example])
     
     
     /// The non-persona (defer to the Ollama modelfile)
-    static let none = Persona(directResponseSystemPrompt: "", interjectionSystemPrompt: "")
+    static let none = Persona(directResponseSystemPrompt: "", interjectionSystemPrompt: "", tools: [])
 }

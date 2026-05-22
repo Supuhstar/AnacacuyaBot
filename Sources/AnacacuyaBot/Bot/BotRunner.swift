@@ -617,6 +617,7 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
+                    tools: persona.tools.map(OllamaTool.init),
                     settings: settings
                 )
                 .postprocessed()
@@ -649,7 +650,9 @@ private extension BotRunner {
     /// are known to the store.
     private func runTimeBasedInterjector() async {
         // Only think about interjecting after 0.5~2 hours have passed
-        try? await Task.sleep(for: .hours(.random(in: 0.5 ... 2)))
+        let hoursTilNextInterjectionChance: Double = .random(in: 0.5 ... 2)
+        log(info: "Will try to interject in \(hoursTilNextInterjectionChance) hours...")
+        try? await Task.sleep(for: .hours(hoursTilNextInterjectionChance))
         
         while false == Task.isCancelled {
             do {
@@ -660,10 +663,16 @@ private extension BotRunner {
                 return
             }
             
-            guard let randomChat = await store.allChats().randomElement() else { continue }
+            guard let randomChat = await store.allChats().randomElement() else {
+                log(warning: "Couldn't find any chats to interject in")
+                continue
+            }
             
             var state = await store.state(for: randomChat)
-            guard await state.stillAllowedToInterjectToday() else { continue }
+            guard await state.stillAllowedToInterjectToday() else {
+                log(info: "Not interjecting; I've said too much today already.")
+                continue
+            }
             
             await interject(inReplyTo: nil, state: &state)
         }

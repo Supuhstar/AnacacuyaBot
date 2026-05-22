@@ -122,11 +122,13 @@ public extension Ollama {
     func chat(
         with model: OllamaModel,
         context: [ChatMessage],
+        tools: [OllamaTool]?,
         settings: OllamaModelOptions?,
     ) async throws -> String {
         try await chat(
             with: model,
             context: await context.async.map(OllamaMessage.init).collect(),
+            tools: tools,
             settings: settings,
         )
     }
@@ -136,11 +138,13 @@ public extension Ollama {
     func chat(
         with model: OllamaModel,
         context: [OllamaMessage],
+        tools: [OllamaTool]?,
         settings: OllamaModelOptions?,
     ) async throws -> String {
         try await self.chat(
             model: model,
             messages: context,
+            tools: tools,
             options: settings,
         )
         .message

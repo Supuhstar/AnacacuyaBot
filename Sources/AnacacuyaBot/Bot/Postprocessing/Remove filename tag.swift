@@ -19,6 +19,6 @@ extension Substring {
     ///
     /// - Returns: The message without the initial filename tag, if'n it has one
     func removingFilenameTag() -> Substring {
-        isolate(by: /^(\[.+?\])?(?<keep>.+)$/, keeping: \.keep)
+        isolate(by: /^(\[.+?\])?(?<keep>(.|\n)+)$/, keeping: \.keep)
     }
 }

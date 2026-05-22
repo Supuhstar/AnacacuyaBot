@@ -29,7 +29,11 @@ extension Persona {
             You're a member of a casual group chat. No one is talking to you right now.
             // You NEVER summarize what has been said.
             Say whatever you want!
-            """
+            """,
+        
+        tools: [
+            .example
+        ],
     )
 }
 
@@ -68,6 +72,9 @@ struct Persona: Sendable {
     /// because the model must understand it's commenting on a
     /// conversation rather than continuing one.
     let interjectionSystemPrompt: String
+    
+    /// The tools that this persona allows
+    let tools: [BotTool]
     
     
     /// Composes the messages that you can send to Ollama to give the model all the context it needs for a response.

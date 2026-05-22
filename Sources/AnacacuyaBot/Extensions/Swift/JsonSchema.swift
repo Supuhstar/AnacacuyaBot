@@ -58,14 +58,17 @@ public struct JsonSchema: Sendable {
         /// enum, and the right tool for asking a model to choose between named
         /// options without risk of hallucinated values.
         case string(enumeration: [String]? = nil)
+        static var string: Self { .string() }
         
         /// Use for whole-number values. `minimum` and `maximum` are inclusive
         /// bounds; omit either to leave that end unbounded.
         case integer(minimum: Int? = nil, maximum: Int? = nil)
+        static var integer: Self { .integer() }
         
         /// Use for fractional values. Prefer `.integer` when fractions must
         /// be rejected at the schema level rather than by downstream validation.
         case number(minimum: Double? = nil, maximum: Double? = nil)
+        static var number: Self { .number() }
         
         /// Use for `true`/`false` values.
         case boolean
@@ -80,12 +83,10 @@ public struct JsonSchema: Sendable {
         
         /// Use for objects with known key sets.
         ///
-        /// `required` lists the keys that must be present; unlisted keys are
-        /// optional. `additionalProperties` defaults to `false` rather than
-        /// the JSON Schema spec default of `true` because the dominant consumer
-        /// of this type — OpenAI's strict structured-output mode — rejects
-        /// schemas that permit extra keys. Override explicitly when targeting a
-        /// permissive endpoint or a validator rather than a model.
+        /// - Parameters:
+        ///   - properties: All the properties of this schema object
+        ///   - required:   the keys that must be present; unlisted keys are optional
+        ///   - additionalProperties: defaults to `false` rather than the JSON Schema spec default of `true` because the dominant consumer of this type — OpenAI's strict structured-output mode — rejects schemas that permit extra keys. Override explicitly when targeting a permissive endpoint or a validator rather than a model.
         case object(
             properties: [String: JsonSchema],
             required: [String] = [],
@@ -302,6 +303,8 @@ public extension JsonSchema {
     ) -> JsonSchema {
         .init(shape: .string(enumeration: enumeration), description: description)
     }
+    static var string: Self { .string() }
+    
     
     /// Use when the field represents a whole number, optionally bounded.
     static func integer(
@@ -311,6 +314,7 @@ public extension JsonSchema {
     ) -> JsonSchema {
         .init(shape: .integer(minimum: minimum, maximum: maximum), description: description)
     }
+    static var integer: Self { .integer() }
     
     /// Use when the field represents a fractional value, optionally bounded.
     static func number(
@@ -320,6 +324,7 @@ public extension JsonSchema {
     ) -> JsonSchema {
         .init(shape: .number(minimum: minimum, maximum: maximum), description: description)
     }
+    static var number: Self { .number() }
     
     /// Use for boolean fields.
     static func boolean(description: String? = nil) -> JsonSchema {
