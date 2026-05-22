@@ -1,6 +1,15 @@
 {
-  "originHash" : "9b49699fd960e76f6c6770f3471195ad41ab804c622667aae5248a06ad5e4f90",
+  "originHash" : "239898e7c0b3bb046d0b29549846b1aaa6d983418c533c69538a5f16b8f06383",
   "pins" : [
+    {
+      "identity" : "swift-async-algorithms",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-async-algorithms.git",
+      "state" : {
+        "revision" : "d0b4a06d0f173a2f3be27d3ea21b3c3aa18db440",
+        "version" : "1.1.4"
+      }
+    },
     {
       "identity" : "swift-collection-tools",
       "kind" : "remoteSourceControl",
@@ -8,6 +17,15 @@
       "state" : {
         "revision" : "84330a040a57296eb6a4d0c801294689dab80166",
         "version" : "3.2.1"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
+        "version" : "1.5.1"
       }
     },
     {
@@ -20,6 +38,24 @@
       }
     },
     {
+      "identity" : "swift-lazy-containers",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Lazy-Containers.git",
+      "state" : {
+        "revision" : "360a35c98992fc53739e884fb0c48e988710fa92",
+        "version" : "4.1.0"
+      }
+    },
+    {
+      "identity" : "swift-multiplicativearithmetic",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-MultiplicativeArithmetic.git",
+      "state" : {
+        "revision" : "960ccc54d6c876983c6658d4aca637b4685e9841",
+        "version" : "2.1.0"
+      }
+    },
+    {
       "identity" : "swift-optional-tools",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RougeWare/Swift-Optional-Tools.git",
@@ -29,12 +65,39 @@
       }
     },
     {
+      "identity" : "swift-rectangle-tools",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Rectangle-Tools",
+      "state" : {
+        "revision" : "146dd37c698a7c16c00e881e27ffd0f27956167c",
+        "version" : "2.18.0"
+      }
+    },
+    {
+      "identity" : "swift-semver",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-SemVer.git",
+      "state" : {
+        "revision" : "087d41c30c38237179e70178ce93895cd7ff0886",
+        "version" : "2.0.0"
+      }
+    },
+    {
       "identity" : "swift-serializationtools",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RougeWare/Swift-SerializationTools.git",
       "state" : {
         "revision" : "4d151e1513b04da2ddc9fe464352e4070f7d992f",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-simple-logging",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RougeWare/Swift-Simple-Logging",
+      "state" : {
+        "revision" : "b342dca99eb50fce83ff937953c82bc15397e821",
+        "version" : "0.6.0-Beta.3"
       }
     },
     {

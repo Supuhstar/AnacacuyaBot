@@ -12,9 +12,14 @@ let package = Package(
     ],
     
     dependencies: [
+        .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.4"),
+        
         .package(url: "https://github.com/RougeWare/Swift-Collection-Tools.git", from: "3.2.1"),
+        .package(url: "https://github.com/RougeWare/Swift-Rectangle-Tools", from: "2.18.0"),
+        .package(url: "https://github.com/RougeWare/Swift-SemVer.git", from: "2.0.0"),
         .package(url: "https://github.com/RougeWare/Swift-SerializationTools.git", from: "1.1.1"),
-        .package(url: "https://github.com/RougeWare/Swift-Special-String", from: "1.2.0"),
+        .package(url: "https://github.com/RougeWare/Swift-Simple-Logging", .upToNextMinor(from: "0.6.0-Beta.3")),
+        .package(url: "https://github.com/RougeWare/Swift-Special-String.git", from: "1.2.0"),
     ],
     
     targets: [
@@ -23,16 +28,22 @@ let package = Package(
         .executableTarget(
             name: "AnacacuyaBot",
             dependencies: [
+                .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
+                
                 .product(name: "CollectionTools", package: "Swift-Collection-Tools"),
+                .product(name: "RectangleTools", package: "Swift-Rectangle-Tools"),
+                .product(name: "SemVer", package: "Swift-SemVer"),
                 .product(name: "SerializationTools", package: "Swift-SerializationTools"),
+                .product(name: "SimpleLogging", package: "Swift-Simple-Logging"),
                 .product(name: "SpecialString", package: "Swift-Special-String"),
             ],
             swiftSettings: [
+                .defaultIsolation(nil),
                 .strictMemorySafety(),
                 .treatAllWarnings(as: .error),
                 .unsafeFlags([
                     "-enable-bare-slash-regex",
-                ])
+                ]),
             ],
         ),
         .testTarget(

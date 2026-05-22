@@ -7,6 +7,8 @@
 
 import Foundation
 
+import SimpleLogging
+
 
 
 /// Per-chat memory holding a sliding window of recent messages and the
@@ -150,10 +152,10 @@ extension ChatState {
         messagesUntilCountTrigger = Int.random(in: messageCountTriggerRange)
         
         if stillAllowedToInterjectToday() {
-            print(chat.nameForLog, "•", "Interjection \(interjectionCount)/\(maxDailyInterjections). Next interjection in \(messagesUntilCountTrigger) messages")
+            log(info: "[\(chat.nameForLog)] Interjection \(interjectionCount)/\(maxDailyInterjections). Next interjection in \(messagesUntilCountTrigger) messages")
         }
         else {
-            print(chat.nameForLog, "•", "No more interjections today")
+            log(info: "[\(chat.nameForLog)] No more interjections today")
         }
     }
     
