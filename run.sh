@@ -81,8 +81,15 @@ getToken_secret_tool() {
 }
 
 
+getToken_pass() {
+    pass show "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}"
+}
+
+
 getToken() {
-    if command -v security &>/dev/null; then
+    if command -v pass &>/dev/null; then
+        getToken_pass
+    elif command -v security &>/dev/null; then
         getToken_security
     elif command -v secret-tool &>/dev/null; then
         getToken_secret_tool
@@ -114,9 +121,17 @@ storeToken_secret_tool() {
 }
 
 
+storeToken_pass() {
+    local token="$1"
+    echo -n "$token" | pass insert --echo "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}"
+}
+
+
 storeToken() {
     local token="$1"
-    if command -v security &>/dev/null; then
+    if command -v pass &>/dev/null; then
+        storeToken_pass "$token"
+    elif command -v security &>/dev/null; then
         storeToken_security "$token"
     elif command -v secret-tool &>/dev/null; then
         storeToken_secret_tool "$token"
