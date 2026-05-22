@@ -14,6 +14,9 @@
 ###                                Omit this flag to attempt to download that model if it's missing.
 ###                                If you've already got the model available and ready, this flag does nothing and that model is used.
 ###
+###   - --reset:                   _optional_ - Reset all stored state, such as token stores, then exit.
+###                                Other parameters are ignord.
+###
 
 
 
@@ -21,6 +24,7 @@
 
 ALLOW_STALE_BRANCHES=false
 FAIL_IF_MODEL_NOT_FOUND=false
+RESET_STORED_STATE=false
 for arg in "$@"; do
     case "$arg" in
         --allow-stale-branch)
@@ -29,6 +33,10 @@ for arg in "$@"; do
         
         --fail-if-model-not-found)
             FAIL_IF_MODEL_NOT_FOUND=true
+            ;;
+        
+        --reset)
+            RESET_STORED_STATE=true
             ;;
     esac
 done
@@ -94,7 +102,7 @@ getToken() {
     elif command -v secret-tool &>/dev/null; then
         getToken_secret_tool
     else
-	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'security' and 'secret-tool')." >&2
+	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'pass', 'security', and 'secret-tool')." >&2
         return 11
     fi
 }
@@ -136,10 +144,61 @@ storeToken() {
     elif command -v secret-tool &>/dev/null; then
         storeToken_secret_tool "$token"
     else
-	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'security' and 'secret-tool')." >&2
+	    echo "❌ You need to set TELEGRAM_BOT_TOKEN or install a keyring on this machine which can contain the token (currently supported: 'pass', 'security', and 'secret-tool')." >&2
         return 11
     fi
 }
+
+
+# MARK: clearToken
+
+deleteToken_security() {
+    security delete-generic-password \
+        -a "$USER" \
+        -s "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}"
+}
+
+
+deleteToken_secret_tool() {
+    secret-tool clear \
+        service "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}" \
+        user "$USER"
+}
+
+
+deleteToken_pass() {
+    pass rm "TELEGRAM_BOT_TOKEN-${TELEGRAM_BOT}"
+}
+
+
+deleteToken() {
+    didDelete=false
+    if command -v pass &>/dev/null; then
+        deleteToken_pass
+        didDelete=$?
+    fi
+    if command -v security &>/dev/null; then
+        deleteToken_security
+        didDelete=$?
+    fi
+    if command -v secret-tool &>/dev/null; then
+        deleteToken_secret_tool
+        didDelete=$?
+    fi
+    
+    if [[ ! didDelete ]]; then
+        echo "❌ No keyring backend found (currently supported: 'pass', 'security', 'secret-tool')." >&2
+        return 11
+    fi
+}
+
+
+# MARK: If we're just resetting, reset
+
+if $RESET_STORED_STATE; then
+    deleteToken
+    exit $?
+fi
 
 
 
@@ -182,38 +241,12 @@ if [[ -z "${TELEGRAM_BOT_TOKEN}" ]]; then
     exit 10
 fi
 
-if ! command -v ollama &> /dev/null; then
-    echo "❌ Ollama is not installed. Ollama is required for this bot." >&2
+
+OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-"http://localhost:11434"}
+
+if ! curl -sf "${OLLAMA_BASE_URL}" &>/dev/null; then
+    echo "❌ Ollama is not reachable at ${OLLAMA_HOST}. Make sure Ollama is running." >&2
     exit 20
-fi
-
-
-
-# MARK: - Auto-fetch model
-
-OLLAMA_MODEL=${OLLAMA_MODEL:-"smollm2"}
-
-
-model_exists() {
-    local model="$1"
-    ollama list | awk 'NR>1 {split($1,a,":"); print a[1]}' | grep -qx "$model"
-}
-
-
-if model_exists "$OLLAMA_MODEL"; then
-    echo "✅ Model '$OLLAMA_MODEL' is ready."
-else
-    if $FAIL_IF_MODEL_NOT_FOUND; then
-        echo "❌ Model '$OLLAMA_MODEL' not found." >&2
-        exit 21
-    else
-        echo "Model '$OLLAMA_MODEL' not found. Downloading it..."
-        
-        if ! ollama pull "${OLLAMA_MODEL}"; then
-            echo "❌ Failed to pull '$OLLAMA_MODEL'" >&2
-            exit 22
-        fi
-    fi
 fi
 
 
