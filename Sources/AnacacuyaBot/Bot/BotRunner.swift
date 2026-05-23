@@ -610,6 +610,8 @@ private extension BotRunner {
         state: inout ChatState,
         inReplyTo: Int?,
     ) async {
+        let canCallTools = toolCallsSoFar < Limits.maxSelfInteractions
+        
         let reply: Ollama.ChatResponse
         
         do {
@@ -619,7 +621,7 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
-                    tools: toolCallsSoFar < Limits.maxSelfInteractions ? persona.tools.map(OllamaTool.init) : nil,
+                    tools: canCallTools ? persona.tools.map(OllamaTool.init) : nil,
                     settings: settings
                 )
                 .postprocessed()
@@ -629,9 +631,7 @@ private extension BotRunner {
             return
         }
         
-        if let toolCalls = reply.toolCalls?.nonEmptyOrNil,
-           toolCallsSoFar < Limits.maxSelfInteractions
-        {
+        if let toolCalls = reply.toolCalls?.nonEmptyOrNil {
             await runToolCalls(
                 toolCalls,
                 context: context,
@@ -666,12 +666,12 @@ private extension BotRunner {
         typealias CalledTool = (tool: BotTool, call: OllamaToolCall)
         
         
-        let calledTools: [CalledTool]? = persona.tools.compactMap { availableTool in
-                let calledTool = toolCalls.first { calledTool in
+        let calledTools: [CalledTool]? = toolCalls.compactMap { calledTool in
+                let availableTool = persona.tools.first { availableTool in
                     availableTool.matches(calledTool)
                 }
                 
-                if let calledTool {
+                if let availableTool {
                     return (tool: availableTool, call: calledTool)
                 }
                 else {
