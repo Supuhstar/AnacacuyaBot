@@ -16,8 +16,8 @@ public extension BotTool {
     /// A tool that an LLM can use
     static var example: Self {
         Self.init(
-            function: .init(
-                name: "Example",
+            definition: .init(
+                name: "example",
                 description: "Use this tool whenever someone says 'Foobar!'",
                 parameters: .object(
                     properties: [
@@ -51,8 +51,13 @@ public extension BotTool {
                         }
                         
                     default:
-                        log(info: "Unsupported argument sent to tool: \(key)")
+                        continue
                     }
+                }
+                
+                
+                for (key, value) in arguments {
+                    log(warning: "Unsupported argument sent to tool: \"\(key)\": \(value)")
                 }
                 
                 return "BAZ"

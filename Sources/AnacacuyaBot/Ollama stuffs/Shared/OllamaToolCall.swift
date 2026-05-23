@@ -16,7 +16,6 @@ public struct OllamaToolCall: OllamaTranceivable {
 extension OllamaToolCall {
     struct Function: OllamaTranceivable {
         let name: String
-        let parameters: JsonSchema
         var description: String?
         var arguments: [String : JsonValue]?
     }

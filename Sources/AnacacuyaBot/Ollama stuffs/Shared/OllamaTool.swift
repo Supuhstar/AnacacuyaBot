@@ -37,6 +37,7 @@ public extension OllamaTool {
     
     /// A function that a LLM can use as a tool.
     struct Function: OllamaRequest {
+        
         /// An arbitrary name for this tool . Keep it short, like `"search"` or `"get_current_weather"`.
         public let name: String
         

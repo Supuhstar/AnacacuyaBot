@@ -14,7 +14,7 @@ import Foundation
 public struct BotTool: Sendable {
     
     /// The technical description of the tool which will be sent to Ollama
-    public let function: OllamaTool.Function
+    public let definition: Definition
     
     
     /// Determines whether this tool matches a tool call
@@ -25,33 +25,36 @@ public struct BotTool: Sendable {
     /// 
     /// - Parameters:
     ///   - arguments: The arguments the bot sends to this tool
-    /// 
-    /// - String:
     public let botDidUse: BotDidUse
     
     
-    init(function: OllamaTool.Function,
+    init(definition: OllamaTool.Function,
          matches: Matches? = nil,
          botDidUse: @escaping BotDidUse)
     {
-        self.function = function
+        self.definition = definition
         self.botDidUse = botDidUse
         
         self.matches = matches ?? { toolCall in
-            toolCall.function.name == function.name
+            toolCall.function.name.localizedCaseInsensitiveCompare(definition.name) == .orderedSame
         }
     }
     
     
     /// Pass through all function members
     public subscript <T>(dynamicMember keyPath: KeyPath<OllamaTool.Function, T>) -> T {
-        function[keyPath: keyPath]
+        definition[keyPath: keyPath]
     }
     
     
     
+    /// Defines how an LLM sees a tool
+    public typealias Definition = OllamaTool.Function
+    
+    /// A function that's called when the bot uses a tool
     public typealias BotDidUse = @Sendable (_ arguments: [String : JsonValue]?) async throws(BotToolError) -> String
     
+    /// Determines whether a tool matches the LLM's attempt to call a tool
     public typealias Matches = @Sendable (_ toolCall: OllamaToolCall) -> Bool
 }
 
@@ -89,6 +92,6 @@ public extension OllamaTool {
     
     /// Create an Ollama tool spec based on the given bot tool
     init(_ botTool: BotTool) {
-        self.init(function: botTool.function)
+        self.init(function: botTool.definition)
     }
 }
