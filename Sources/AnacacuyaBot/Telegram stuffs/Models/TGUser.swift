@@ -16,17 +16,25 @@ public struct TGUser: Decodable, Sendable {
     
     /// Unique identifier for this user or bot. Telegram notes this may exceed
     /// 32 bits but stays within 52, so `Int64` is safe.
-    let id: Int64
+    public let id: Int64
     
     /// `true` if this user is a bot account.
-    let isBot: Bool
+    public let isBot: Bool
     
     /// User's or bot's first name. Always present in the wire format.
-    let firstName: String
+    public let firstName: String
     
     /// Username, when the user has set one. Absent for users without a public
     /// handle.
-    let username: String?
+    public let username: String?
+    
+    
+    public init(id: Int64, isBot: Bool, firstName: String, username: String?) {
+        self.id = id
+        self.isBot = isBot
+        self.firstName = firstName
+        self.username = username
+    }
 }
 
 
