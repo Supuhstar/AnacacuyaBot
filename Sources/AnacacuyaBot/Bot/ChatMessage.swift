@@ -73,7 +73,7 @@ public struct ChatMessage: Sendable {
 
 
 
-extension ChatMessage {
+public extension ChatMessage {
     
     /// Builds a chat message using the given incoming message details
     ///
@@ -171,6 +171,26 @@ extension ChatMessage {
                 )
                 """
         }
+    }
+}
+
+
+
+public extension ChatMessage {
+    
+    /// Constructs a chat message to send to the bot as a way of communicating the result of calling a tool
+    ///
+    /// - Parameters:
+    ///   - toolName:   The name of the tool which was called
+    ///   - resultText: The text of the result of the tool call
+    static func toolCallResult(toolName: String, resultText: String) -> Self {
+        ChatMessage(
+            id: nil,
+            sender: .toolCall(toolName: toolName),
+            role: .tool,
+            isReply: false,
+            text: resultText,
+        )
     }
 }
 

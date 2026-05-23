@@ -20,7 +20,7 @@ import CollectionTools
 /// which combinations are valid.
 ///
 /// Source: https://core.telegram.org/bots/api#message
-struct TGMessage: Decodable, Sendable {
+public struct TGMessage: Decodable, Sendable {
     
     /// Unique message identifier inside this chat.
     let messageId: ID
@@ -86,5 +86,5 @@ extension TGMessage: Identifiable {
     
     /// Identity tracks `messageId` because it's stable within a chat for the
     /// lifetime of the message.
-    var id: Int { messageId }
+    public var id: Int { messageId }
 }

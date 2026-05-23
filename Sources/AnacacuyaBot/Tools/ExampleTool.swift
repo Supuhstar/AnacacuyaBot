@@ -11,54 +11,52 @@ import SimpleLogging
 
 
 
-/// A tool that an LLM can use
-public struct ExampleTool: BotTool {
+public extension BotTool {
     
-    /// The technical description of the tool which will be sent to Ollama
-    public static let function = OllamaTool.Function(
-        name: "Example",
-        description: "Use this tool whenever someone says 'Foobar!'",
-        parameters: .object(properties: [
-                "echo" : .string
-            ],
-            description: "Always reply in this format"
-        )
-    )
-    
-    
-    public func botDidUse(arguments: [String : JsonValue]?) throws(BotToolError) -> String {
-        guard let arguments else {
-            log(info: "Bot called the example tool with no arguments")
-            return "Tool call successful! Token: awawa67"
-        }
-        
-        for (key, value) in arguments {
-            switch key {
-                case "echo":
-                switch value {
-                    case .string(let echoed):
-                        return echoed
-                    
-                    default:
-                        do {
-                            return try value.jsonString()
-                        }
-                        catch {
-                            throw .errorForDev(error)
-                        }
+    /// A tool that an LLM can use
+    static var example: Self {
+        Self.init(
+            function: .init(
+                name: "Example",
+                description: "Use this tool whenever someone says 'Foobar!'",
+                parameters: .object(
+                    properties: [
+                        "echo" : .string
+                    ],
+                    description: "Always reply in this format"
+                )
+            ),
+            
+            
+            botDidUse: { arguments throws(BotToolError) in
+                guard let arguments else {
+                    log(info: "Bot called the example tool with no arguments")
+                    return "Tool call successful! Token: awawa67"
                 }
                 
-            default:
-                log(info: "Unsupported argument sent to tool: \(key)")
-            }
-        }
-        
-        return "BAZ"
+                for (key, value) in arguments {
+                    switch key {
+                    case "echo":
+                        switch value {
+                        case .string(let echoed):
+                            return echoed
+                            
+                        default:
+                            do {
+                                return try value.jsonString()
+                            }
+                            catch {
+                                throw .errorForDev(error)
+                            }
+                        }
+                        
+                    default:
+                        log(info: "Unsupported argument sent to tool: \(key)")
+                    }
+                }
+                
+                return "BAZ"
+            },
+        )
     }
-}
-
-
-
-public extension BotTool where Self == ExampleTool {
-    static var example: Self { ExampleTool() }
 }

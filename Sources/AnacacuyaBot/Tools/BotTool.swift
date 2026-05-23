@@ -10,10 +10,15 @@ import Foundation
 
 
 /// A tool that an LLM can use
-public protocol BotTool: Sendable {
+@dynamicMemberLookup
+public struct BotTool: Sendable {
     
     /// The technical description of the tool which will be sent to Ollama
-    static var function: OllamaTool.Function { get }
+    public let function: OllamaTool.Function
+    
+    
+    /// Determines whether this tool matches a tool call
+    public let matches: Matches
     
     
     /// This function is called when the bot has decided to use this tool
@@ -22,7 +27,46 @@ public protocol BotTool: Sendable {
     ///   - arguments: The arguments the bot sends to this tool
     /// 
     /// - String:
-    func botDidUse(arguments: [String : JsonValue]?) async throws(BotToolError) -> String
+    public let botDidUse: BotDidUse
+    
+    
+    init(function: OllamaTool.Function,
+         matches: Matches? = nil,
+         botDidUse: @escaping BotDidUse)
+    {
+        self.function = function
+        self.botDidUse = botDidUse
+        
+        self.matches = matches ?? { toolCall in
+            toolCall.function.name == function.name
+        }
+    }
+    
+    
+    /// Pass through all function members
+    public subscript <T>(dynamicMember keyPath: KeyPath<OllamaTool.Function, T>) -> T {
+        function[keyPath: keyPath]
+    }
+    
+    
+    
+    public typealias BotDidUse = @Sendable (_ arguments: [String : JsonValue]?) async throws(BotToolError) -> String
+    
+    public typealias Matches = @Sendable (_ toolCall: OllamaToolCall) -> Bool
+}
+
+
+
+public extension BotTool {
+    
+    /// Run this tool by the given call
+    ///
+    /// - Parameter call: The bot's calling of the tool
+    ///
+    /// - Returns: The result of calling the tool
+    func run(_ call: OllamaToolCall) async throws(BotToolError) -> String {
+        try await botDidUse(call.function.arguments)
+    }
 }
 
 
@@ -44,7 +88,7 @@ public enum BotToolError: Error {
 public extension OllamaTool {
     
     /// Create an Ollama tool spec based on the given bot tool
-    init<Other: BotTool>(_ : Other) {
-        self.init(function: Other.function)
+    init(_ botTool: BotTool) {
+        self.init(function: botTool.function)
     }
 }

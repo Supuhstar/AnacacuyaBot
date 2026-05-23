@@ -7,6 +7,7 @@
 
 import Foundation
 
+import AsyncAlgorithms
 import CollectionTools
 import SimpleLogging
 
@@ -603,12 +604,13 @@ private extension BotRunner {
     /// for why.
     private func sendGeneratedResponse(
         context: [ChatMessage],
+        toolCallsSoFar: Int = 0,
         settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
         inReplyTo: Int?,
     ) async {
-        let reply: String
+        let reply: Ollama.ChatResponse
         
         do {
             async let deduplicated = context.deduplicated()
@@ -617,7 +619,7 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
-                    tools: persona.tools.map(OllamaTool.init),
+                    tools: toolCallsSoFar < Limits.maxSelfInteractions ? persona.tools.map(OllamaTool.init) : nil,
                     settings: settings
                 )
                 .postprocessed()
@@ -627,11 +629,100 @@ private extension BotRunner {
             return
         }
         
-        do {
-            try await send(message: reply, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
+        if let toolCalls = reply.toolCalls?.nonEmptyOrNil,
+           toolCallsSoFar < Limits.maxSelfInteractions
+        {
+            typealias CalledTool = (tool: BotTool, call: OllamaToolCall)
+            
+            
+            let calledTools: [CalledTool]? = persona.tools.compactMap { availableTool in
+                    let calledTool = toolCalls.first { calledTool in
+                        availableTool.matches(calledTool)
+                    }
+                    
+                    if let calledTool {
+                        return (tool: availableTool, call: calledTool)
+                    }
+                    else {
+                        return nil
+                    }
+                }
+                .nonEmptyOrNil
+            
+            if let calledTools {
+                    let toolCallResultContext = await calledTools.async.reduce(into: [ChatMessage]()) { toolCallResultContext, calledTool in
+                        let calledToolName = calledTool.call.function.name
+                        log(info: "Called tool \(calledToolName)")
+                        
+                        
+                        func callTool() async -> ChatMessage? {
+                            do {
+                                let toolCallResult = try await calledTool.tool.run(calledTool.call)
+                                return .toolCallResult(
+                                    toolName: calledToolName,
+                                    resultText: toolCallResult,
+                                )
+                            }
+                            catch {
+                                switch error {
+                                case .errorForBot(problemDescription: let problemDescription):
+                                    return .toolCallResult(
+                                        toolName: calledToolName,
+                                        resultText: """
+                                            `\(calledToolName)` failed: \(problemDescription)
+                                            """,
+                                    )
+                                    
+                                case .errorForDev(let error):
+                                    log(error: error)
+                                    return nil // Is this the best thing to do here?
+                                }
+                            }
+                        }
+                        
+                        
+                        if let toolResult = await callTool() {
+                            toolCallResultContext.append(toolResult)
+                        }
+                    }
+                
+                await sendGeneratedResponse(
+                    context: context + toolCallResultContext,
+                    toolCallsSoFar: toolCallsSoFar + 1,
+                    settings: settings,
+                    chatId: chatId,
+                    state: &state,
+                    inReplyTo: inReplyTo,
+                )
+            }
+            else {
+                let requestedToolNames = toolCalls.map(\.function.name).nonEmptyOrNil ?? ["requested"]
+                
+                
+                let fakeToolCallContext = [ChatMessage.toolCallResult(
+                    toolName: "Tool not found",
+                    resultText: """
+                        You don't have access to the \(requestedToolNames.joined(separator: ", ")) tool\(requestedToolNames.count == 1 ? "" : "s")
+                        """,
+                )]
+                
+                await sendGeneratedResponse(
+                    context: context + fakeToolCallContext,
+                    toolCallsSoFar: toolCallsSoFar + 1,
+                    settings: settings,
+                    chatId: chatId,
+                    state: &state,
+                    inReplyTo: inReplyTo,
+                )
+            }
         }
-        catch {
-            log(error: error, "Failed to send generated reply")
+        else {
+            do {
+                try await send(message: reply.message, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
+            }
+            catch {
+                log(error: error, "Failed to send generated reply")
+            }
         }
     }
     

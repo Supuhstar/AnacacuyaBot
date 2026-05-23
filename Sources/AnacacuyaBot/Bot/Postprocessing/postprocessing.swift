@@ -9,9 +9,25 @@ import Foundation
 
 
 
+public extension Ollama.ChatResponse {
+    
+    /// Runs postprocessing on this bot message to make it good enough to send to the user
+    ///
+    /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
+    @MainActor
+    func postprocessed() -> Self {
+        Self(
+            message: self.message.postprocessed(),
+            toolCalls: self.toolCalls,
+        )
+    }
+}
+
+
+
 public extension String {
     
-    /// Runs postprocessing on a bot message to make it good enough to send to the user
+    /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
@@ -25,7 +41,7 @@ public extension String {
 
 public extension Substring {
     
-    /// Runs postprocessing on a bot message to make it good enough to send to the user
+    /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor

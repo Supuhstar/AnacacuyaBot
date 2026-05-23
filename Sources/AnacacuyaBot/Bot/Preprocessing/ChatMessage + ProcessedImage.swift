@@ -10,10 +10,10 @@ import Foundation
 
 
 
-extension ChatMessage {
+public extension ChatMessage {
     
     /// A message sent in a chat, processed to be seen by the bot
-    struct ProcessedImage {
+    struct ProcessedImage: Sendable {
         
         /// The raw data of the image from Telegram
         let rawData: Data
@@ -25,7 +25,7 @@ extension ChatMessage {
 
 
 
-extension ChatMessage.ProcessedImage {
+public extension ChatMessage.ProcessedImage {
     
     /// Runs the given vision model in the given Ollama instance to describe the given image
     ///
