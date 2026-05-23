@@ -11,6 +11,107 @@ import AnacacuyaBot
 
 
 
+// MARK: - No-ops (postprocessing does nothing
+
+struct NoOpTests {
+    
+    @Test func emptyString() async throws {
+        let example = ""
+        let postprocessed = await example.postprocessed()
+        #expect(postprocessed == example)
+    }
+    
+    
+    @Test func normalResponse() async throws {
+        let example = """
+            I think that's just how it was back in the day; I mean, this is 1980s technology we're talking about here.
+            """
+        let postprocessed = await example.postprocessed()
+        #expect(postprocessed == example)
+    }
+}
+
+
+
+// MARK: - Combinations
+
+struct PostprocessingCombinationsTests {
+    
+    init() async {
+        await setUpBot()
+    }
+    
+    
+    @Test func quotedAndSelfIntroductory() async throws {
+        let example = """
+            "@AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts."
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("""
+            Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
+            """
+            == postprocessed)
+    }
+}
+
+
+
+// MARK: - Self-introduction
+
+struct SelfIntroductionTests {
+    
+    init() async {
+        await setUpBot()
+    }
+    
+    
+    @Test func handle() async throws {
+        let example = """
+            @AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("""
+            Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
+            """
+            == postprocessed)
+    }
+    
+    
+    @Test func you() async throws {
+        let example = """
+            you:
+            :) Yeah, that's true, it does have an old-world charm to it. The bicycle stands out against the modern buildings, and the cobblestones are really cool. It feels like a different era.
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("""
+            :) Yeah, that's true, it does have an old-world charm to it. The bicycle stands out against the modern buildings, and the cobblestones are really cool. It feels like a different era.
+            """
+            == postprocessed)
+    }
+    
+    
+    @Test func multiYou() async throws {
+        let example = """
+            you:
+            you:
+            *raises eyebrows and chortles quietly to himself* Ah, @dogval. Your responses never fail to bring a smile to my face. 😄
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("""
+            *raises eyebrows and chortles quietly to himself* Ah, @dogval. Your responses never fail to bring a smile to my face. 😄
+            """
+            == postprocessed)
+    }
+}
+
+
+
+// MARK: - Fake chat logs
+
 struct FakeChatLogRemovalTests {
     
     @Test func keepingPreamble_1() async throws {
@@ -26,7 +127,7 @@ struct FakeChatLogRemovalTests {
             4. AnacacuyaBot reflects, stating that it's all a part of life and universe.
             """
         
-        let postprocessed = await example[...].postprocessed()
+        let postprocessed = await example.postprocessed()
         #expect("it's all in the universe, right?" == postprocessed)
     }
     
@@ -50,7 +151,7 @@ struct FakeChatLogRemovalTests {
             yeah, thanks for offering @djeidragon
             """
         
-        let postprocessed = await example[...].postprocessed()
+        let postprocessed = await example.postprocessed()
         #expect("""
             Sorry about that, @ninedd.
             
@@ -71,7 +172,7 @@ struct FakeChatLogRemovalTests {
             https://github.com/NousResearch/hermes-agent/blob/main/skills/apple/apple-reminders/SKILL.md
             """
         
-        let postprocessed = await example[...].postprocessed()
+        let postprocessed = await example.postprocessed()
         #expect("" == postprocessed)
     }
     
@@ -96,7 +197,7 @@ struct FakeChatLogRemovalTests {
             it looks like a map from 1976 or something?
             """
         
-        let postprocessed = await example[...].postprocessed()
+        let postprocessed = await example.postprocessed()
         #expect("" == postprocessed)
     }
 }
