@@ -52,6 +52,14 @@ LogManager.defaultChannels = [
 ]
 
 
+log(verbose: "Verbose logging enabled")
+log(debug: "Debug logging enabled")
+log(info: "Info logging enabled")
+log(warning: "Warning logging enabled")
+log(error: "Error logging enabled")
+log(fatal: "Fatal logging enabled")
+
+
 
 // MARK: - Run the bot
 

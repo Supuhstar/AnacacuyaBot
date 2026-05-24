@@ -271,6 +271,10 @@ private extension TelegramClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try body.jsonData(keyEncodingStrategy: keyEncodingStrategy)
         
+        log(debug: """
+            POSTing to \(url):
+            \((try? (req.httpBody?.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase) ?? "(null)")) ?? "(not JSON)")
+            """)
         let (data, _) = try await URLSession.shared.data(for: req)
         return try unwrap(data)
     }

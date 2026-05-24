@@ -251,6 +251,10 @@ public extension URL {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = timeout.timeInterval
         req.httpBody = body
+        log(debug: """
+            \(method)ing to \(self):
+            \((try? (body?.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase) ?? "(null)")) ?? "(not JSON)")
+            """)
         let (data, urlResponse) = try await URLSession.shared.data(for: req)
         
         if let statusCode = (urlResponse as? HTTPURLResponse)?.statusCode,
