@@ -253,4 +253,6 @@ fi
 
 # MARK: - Run
 
-swift run --run $@
+echo "Running with: $@"
+
+swift run --run AnacacuyaBot $@

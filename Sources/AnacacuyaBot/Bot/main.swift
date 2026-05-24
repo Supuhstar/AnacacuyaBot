@@ -25,6 +25,8 @@ import Foundation
 
 let arguments = CommandLine.arguments
 let verbose = arguments.contains("--verbose")
+print("✳️ CommandLine.arguments             == ", CommandLine.arguments)
+print("✳️ ProcessInfo.processInfo.arguments == ", ProcessInfo.processInfo.arguments)
 
 
 
