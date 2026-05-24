@@ -18,7 +18,15 @@ enum Limits {}
 extension Limits {
     
     /// How many times should the bot be allowed to use a tool as the result of using another tool?
+    ///
+    /// Set this to 0 to disable tool calls entirely.
+    /// Set this to 1 to allow the bot to use a tool but never use that result to call another tool.
     static let maxSelfInteractions = 3
+    
+    /// How many times should the bot retry a message involving a tool call before giving up trying to call tools?
+    ///
+    /// This applies recursively to deeper tool calls if ``maxSelfInteractions`` is greater than 1.
+    static let maxToolCallRetries = 3
 }
 
 

@@ -605,12 +605,29 @@ private extension BotRunner {
     private func sendGeneratedResponse(
         context: [ChatMessage],
         toolCallsSoFar: Int = 0,
+        retriesOfThisCallSoFar: Int = 0,
         settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
-        inReplyTo: Int?,
+        inReplyTo targetedMessageId: Int?,
     ) async {
-        let canCallTools = toolCallsSoFar < Limits.maxSelfInteractions
+        let allowedToCallTools = toolCallsSoFar < Limits.maxSelfInteractions
+        
+        guard retriesOfThisCallSoFar < Limits.maxToolCallRetries else {
+            log(error: "Retried too many times; aborting")
+            
+            if !allowedToCallTools {
+                // we're out of attempts. Tell the end user
+                try? await send(
+                    message: "I don't know what to say.",
+                    inChat: chatId,
+                    replyingTo: targetedMessageId,
+                    chatState: &state,
+                )
+            }
+            
+            return
+        }
         
         let reply: OllamaChatResponse
         
@@ -621,10 +638,22 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
-                    tools: canCallTools ? persona.tools.map(OllamaTool.init) : nil,
+                    tools: allowedToCallTools ? persona.tools.map(OllamaTool.init) : nil,
                     settings: settings
                 )
                 .postprocessed()
+            
+            if failedToolCallMessage == reply.message.content {
+                return await sendGeneratedResponse(
+                    context: context,
+                    toolCallsSoFar: toolCallsSoFar,
+                    retriesOfThisCallSoFar: retriesOfThisCallSoFar + 1,
+                    settings: settings,
+                    chatId: chatId,
+                    state: &state,
+                    inReplyTo: targetedMessageId,
+                )
+            }
         }
         catch {
             log(error: error, "Generation error: \(error)")
@@ -637,10 +666,11 @@ private extension BotRunner {
                 from: reply,
                 context: context,
                 toolCallsSoFar: toolCallsSoFar,
+                retriesOfThisCallSoFar: retriesOfThisCallSoFar,
                 settings: settings,
                 chatId: chatId,
                 state: &state,
-                inReplyTo: inReplyTo,
+                inReplyTo: targetedMessageId,
             )
         }
         else {
@@ -648,28 +678,44 @@ private extension BotRunner {
                 try await send(
                     message: reply.message.content,
                     inChat: chatId,
-                    replyingTo: inReplyTo,
+                    replyingTo: targetedMessageId,
                     chatState: &state,
                 )
             }
             catch {
                 log(error: error, "Failed to send generated reply")
+                
+                
             }
         }
     }
-    
+}
+
+
+
+// MARK: - Tool use
+
+/// If Ollama responds with this, the tool call failed.
+///
+/// It sends this with an HTTP 200 and `"done_reason":"stop"`, so matching against this string is the only way we can tell if it failed
+private let failedToolCallMessage = "The given question lacks the parameters required by the function."
+
+
+
+private extension BotRunner {
     
     func runToolCalls(
         _ toolCalls: [OllamaToolCall],
         from caller: OllamaChatResponse,
         context: [ChatMessage],
         toolCallsSoFar: Int,
+        retriesOfThisCallSoFar: Int,
         settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
-        inReplyTo: Int?,
+        inReplyTo targetedMessageId: Int?,
     ) async {
-        typealias CalledTool = (tool: BotTool, call: OllamaToolCall)
+        typealias CalledTool = (tool: BotTool, request: OllamaToolCall)
         
         
         
@@ -681,7 +727,7 @@ private extension BotRunner {
                 }
                 
                 if let availableTool {
-                    return (tool: availableTool, call: calledTool)
+                    return (tool: availableTool, request: calledTool)
                 }
                 else {
                     return nil
@@ -692,13 +738,13 @@ private extension BotRunner {
         if let calledTools {
             do {
                 let toolCallResultContext = try await calledTools.async.reduce(into: [ChatMessage]()) { toolCallResultContext, calledTool in
-                        let calledToolName = calledTool.call.function.name
+                        let calledToolName = calledTool.request.function.name
                         log(info: "Called tool \(calledToolName)")
                         
                         
                         func callTool() async throws -> ChatMessage? {
                             do {
-                                let toolCallResult = try await calledTool.tool.run(calledTool.call)
+                                let toolCallResult = try await calledTool.tool.run(calledTool.request)
                                 return .toolCallResult(
                                     toolName: calledToolName,
                                     resultText: toolCallResult,
@@ -734,7 +780,7 @@ private extension BotRunner {
                     settings: settings,
                     chatId: chatId,
                     state: &state,
-                    inReplyTo: inReplyTo,
+                    inReplyTo: targetedMessageId,
                 )
             }
             catch {
@@ -744,7 +790,7 @@ private extension BotRunner {
                     try await send(
                         message: "[system] ❌ Critical error",
                         inChat: chatId,
-                        replyingTo: inReplyTo,
+                        replyingTo: targetedMessageId,
                         chatState: &state,
                     )
                 }
@@ -773,7 +819,7 @@ private extension BotRunner {
                 settings: settings,
                 chatId: chatId,
                 state: &state,
-                inReplyTo: inReplyTo,
+                inReplyTo: targetedMessageId,
             )
         }
     }
