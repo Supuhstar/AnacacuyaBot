@@ -612,7 +612,7 @@ private extension BotRunner {
     ) async {
         let canCallTools = toolCallsSoFar < Limits.maxSelfInteractions
         
-        let reply: Ollama.ChatResponse
+        let reply: OllamaChatResponse
         
         do {
             async let deduplicated = context.deduplicated()
@@ -631,9 +631,10 @@ private extension BotRunner {
             return
         }
         
-        if let toolCalls = reply.toolCalls?.nonEmptyOrNil {
+        if let toolCalls = reply.message.toolCalls?.nonEmptyOrNil {
             await runToolCalls(
                 toolCalls,
+                from: reply,
                 context: context,
                 toolCallsSoFar: toolCallsSoFar,
                 settings: settings,
@@ -644,7 +645,12 @@ private extension BotRunner {
         }
         else {
             do {
-                try await send(message: reply.message, inChat: chatId, replyingTo: inReplyTo, chatState: &state)
+                try await send(
+                    message: reply.message.content,
+                    inChat: chatId,
+                    replyingTo: inReplyTo,
+                    chatState: &state,
+                )
             }
             catch {
                 log(error: error, "Failed to send generated reply")
@@ -655,6 +661,7 @@ private extension BotRunner {
     
     func runToolCalls(
         _ toolCalls: [OllamaToolCall],
+        from caller: OllamaChatResponse,
         context: [ChatMessage],
         toolCallsSoFar: Int,
         settings: OllamaModelOptions?,
@@ -662,9 +669,11 @@ private extension BotRunner {
         state: inout ChatState,
         inReplyTo: Int?,
     ) async {
-        
         typealias CalledTool = (tool: BotTool, call: OllamaToolCall)
         
+        
+        
+        let callerMessage = await ChatMessage(caller.message, isReply: true)
         
         let calledTools: [CalledTool]? = toolCalls.compactMap { calledTool in
                 let availableTool = persona.tools.first { availableTool in
@@ -714,6 +723,7 @@ private extension BotRunner {
                         
                         
                         if let toolResult = try await callTool() {
+                            toolCallResultContext.append(callerMessage)
                             toolCallResultContext.append(toolResult)
                         }
                     }
@@ -747,12 +757,15 @@ private extension BotRunner {
             let requestedToolNames = toolCalls.map(\.function.name).nonEmptyOrNil ?? ["requested"]
             
             
-            let fakeToolCallContext = [ChatMessage.toolCallResult(
-                toolName: "Tool not found",
-                resultText: """
+            let fakeToolCallContext: [ChatMessage] = [
+                callerMessage,
+                .toolCallResult(
+                    toolName: "Tool not found",
+                    resultText: """
                         You don't have access to the \(requestedToolNames.joined(separator: ", ")) tool\(requestedToolNames.count == 1 ? "" : "s")
                         """,
-            )]
+                )
+            ]
             
             await sendGeneratedResponse(
                 context: context + fakeToolCallContext,

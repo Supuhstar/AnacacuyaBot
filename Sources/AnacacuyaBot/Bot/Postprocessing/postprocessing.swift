@@ -9,17 +9,31 @@ import Foundation
 
 
 
-public extension Ollama.ChatResponse {
+public extension OllamaChatResponse {
+    
+    /// Runs postprocessing on this bot response to make it good enough to send to the user
+    ///
+    /// - Returns: The bot's response, postprocessed to remove unwanted artifacts
+    @MainActor
+    func postprocessed() -> Self {
+        var copy = self
+        copy.message = message.postprocessed()
+        return copy
+    }
+}
+
+
+
+public extension OllamaMessage {
     
     /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
     func postprocessed() -> Self {
-        Self(
-            message: self.message.postprocessed(),
-            toolCalls: self.toolCalls,
-        )
+        var copy = self
+        copy.content = content.postprocessed()
+        return copy
     }
 }
 

@@ -9,9 +9,10 @@ import Foundation
 
 
 
+/// A message to or from the LLM
 public struct OllamaMessage: OllamaTranceivable {
     let role: ChatMessage.Role
-    let content: String
+    var content: String
     var thinking: String?
     var toolCalls: [OllamaToolCall]?
     var images: [Data]?
@@ -19,11 +20,15 @@ public struct OllamaMessage: OllamaTranceivable {
 
 
 
+// MARK: - Conversions
+
 public extension OllamaMessage {
     init(_ chatMessage: ChatMessage) async {
         self.init(
             role: chatMessage.role,
             content: await chatMessage.contentForLlm,
+            thinking: nil,
+            toolCalls: nil,
             images: chatMessage.images?.map(\.rawData)
         )
     }

@@ -124,7 +124,7 @@ public extension Ollama {
         context: [ChatMessage],
         tools: [OllamaTool]?,
         settings: OllamaModelOptions?,
-    ) async throws -> ChatResponse {
+    ) async throws -> OllamaChatResponse {
         try await chat(
             with: model,
             context: await context.async.map(OllamaMessage.init).collect(),
@@ -140,33 +140,27 @@ public extension Ollama {
         context: [OllamaMessage],
         tools: [OllamaTool]?,
         settings: OllamaModelOptions?,
-    ) async throws -> ChatResponse {
-        ChatResponse(try await self.chat(
+    ) async throws -> OllamaChatResponse {
+        try await self.chat(
             model: model,
             messages: context,
             tools: tools,
             options: settings,
-        ))
+        )
     }
     
     
     /// A summary type of a response from the chatbot
-    struct ChatResponse: Sendable {
-        
-        /// The text of its message
-        public let message: String
-        
-        /// Any tools it wants to use
-        public let toolCalls: [OllamaToolCall]?
-    }
+    @available(*, unavailable, renamed:  "OllamaChatResponse")
+    typealias ChatResponse = OllamaChatResponse
 }
 
 
 
-private extension Ollama.ChatResponse {
+private extension OllamaChatResponse {
+    @available(*, unavailable)
     init(_ response: OllamaChatResponse) {
-        self.message = response.message.content
-        self.toolCalls = response.message.toolCalls
+        self = response
     }
 }
 
@@ -183,7 +177,7 @@ public struct OllamaChatResponse: OllamaResponse {
     /// Timestamp of response creation
     let createdAt: Date
     
-    let message: OllamaMessage
+    var message: OllamaMessage
     
     /// Indicates whether the chat response has finished
     let done: Bool?

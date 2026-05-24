@@ -217,6 +217,30 @@ extension ChatMessage {
 
 
 
+// MARK: - Conversions
+
+extension ChatMessage {
+    
+    init(_ ollamaMessage: OllamaMessage, isReply: Bool) async {
+        self.init(
+            id: nil,
+            sender: await .botUser,
+            role: ollamaMessage.role,
+            isReply: isReply,
+            text: ollamaMessage.content,
+            images: ollamaMessage.images?.map { imageData in
+                // TODO: Is this the best approach here?
+                ProcessedImage(
+                    rawData: imageData,
+                    visionModelDescription: "(no description)",
+                )
+            },
+        )
+    }
+}
+
+
+
 // MARK: - Systemic conveniences
 
 extension ChatMessage {
