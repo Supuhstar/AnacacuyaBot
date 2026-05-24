@@ -245,7 +245,7 @@ fi
 OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-"http://localhost:11434"}
 
 if ! curl -sf "${OLLAMA_BASE_URL}" &>/dev/null; then
-    echo "❌ Ollama is not reachable at ${OLLAMA_HOST}. Make sure Ollama is running." >&2
+    echo "❌ Ollama is not reachable at ${OLLAMA_BASE_URL}. Make sure Ollama is running." >&2
     exit 20
 fi
 
