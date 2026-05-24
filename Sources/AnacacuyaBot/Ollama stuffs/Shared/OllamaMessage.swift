@@ -13,9 +13,10 @@ import Foundation
 public struct OllamaMessage: OllamaTranceivable {
     let role: ChatMessage.Role
     var content: String
-    var thinking: String?
-    var toolCalls: [OllamaToolCall]?
-    var images: [Data]?
+    private(set) var thinking: String?
+    private(set) var toolName: String?
+    private(set) var toolCalls: [OllamaToolCall]?
+    private(set) var images: [Data]?
 }
 
 
@@ -23,11 +24,16 @@ public struct OllamaMessage: OllamaTranceivable {
 // MARK: - Conversions
 
 public extension OllamaMessage {
+    
+    /// Converts the given chat message into an ``OllamaMessage``
+    ///
+    /// - Parameter chatMessage: The generic chat message to encode as a message to Ollama
     init(_ chatMessage: ChatMessage) async {
         self.init(
             role: chatMessage.role,
             content: await chatMessage.contentForLlm,
             thinking: nil,
+            toolName: .tool == chatMessage.role ? chatMessage.sender.firstName : nil,
             toolCalls: nil,
             images: chatMessage.images?.map(\.rawData)
         )

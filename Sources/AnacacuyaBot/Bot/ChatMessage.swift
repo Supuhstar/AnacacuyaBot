@@ -117,10 +117,7 @@ public extension ChatMessage {
             textForLlm
         
         case .tool:
-            """
-            \(sender.nameForLlm) result:
-            \(text)
-            """
+            text
         
         case .assistant, .user:
             """
