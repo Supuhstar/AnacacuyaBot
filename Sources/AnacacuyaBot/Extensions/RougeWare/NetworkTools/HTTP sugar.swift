@@ -253,7 +253,7 @@ public extension URL {
         req.httpBody = body
         log(debug: """
             \(method)ing to \(self):
-            \((try? (body?.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase) ?? "(null)")) ?? "(not JSON)")
+            \(body.map { String(data: $0, encoding: .utf8) ?? "(not UTF-8)" } ?? "(null)")
             """)
         let (data, urlResponse) = try await URLSession.shared.data(for: req)
         
@@ -267,7 +267,7 @@ public extension URL {
         
         log(debug: """
             Received:
-            \((try? data.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase)) ?? "(not JSON)")
+            \(String(data: data, encoding: .utf8) ?? "(not UTF-8)")
             """)
         
         return data
