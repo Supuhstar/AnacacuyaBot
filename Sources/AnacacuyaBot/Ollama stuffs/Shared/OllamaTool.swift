@@ -5,6 +5,8 @@
 //  Created by Ky on 2026-05-16.
 //
 
+import SerializationTools
+
 
 
 /// A callable function the model is permitted to invoke during a chat completion.
@@ -50,5 +52,28 @@ public extension OllamaTool {
         ///
         /// Top level keys are the names of the parameters, associated with their expected inputs.
         public let parameters: JsonSchema
+    }
+}
+
+
+
+public extension OllamaTool.Function {
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        
+        // Encode the JSON Schema through a strategy-free encoder so its camelCase keywords (`additionalProperties`,
+        // `anyOf`, `minItems`, etc.) reach the server intact rather than being snake_cased.
+        let schemaData = try parameters.jsonData(keyEncodingStrategy: .useDefaultKeys)
+        let schemaJson = try JsonValue(jsonData: schemaData, keyDecodingStrategy: .useDefaultKeys)
+        try container.encode(schemaJson, forKey: .parameters)
+    }
+    
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case parameters
     }
 }
