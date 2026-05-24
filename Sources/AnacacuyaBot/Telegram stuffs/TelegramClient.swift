@@ -254,20 +254,20 @@ private extension TelegramClient {
     /// ``get(_:queryItems:receiving:)`` instead.
     ///
     /// - Parameters:
-    ///   - method: The Bot API method name (e.g. `"sendMessage"`).
-    ///   - body:   The request body, JSON-encoded with snake-case keys.
+    ///   - endpoint: The Bot API endpoint name (e.g. `"sendMessage"`).
+    ///   - body:     The request body, JSON-encoded with snake-case keys.
     ///
     /// - Returns: The result payload unwrapped from Telegram's `{ok, result}`
     ///            envelope. Throws if the envelope's `ok` is false or the
     ///            payload can't be decoded.
     func post<Body: Encodable & Sendable, Response: Decodable & Sendable>(
-        _ method: String,
+        _ endpoint: String,
         _ body: Body,
         receiving _: Response.Type = Response.self,
     ) async throws -> Response {
-        try unwrap(envelope: try await URL(string: "\(base)/\(method)")!
+        try unwrap(envelope: try await URL(string: "\(base)/\(endpoint)")!
             .post(
-                try body.jsonData(keyEncodingStrategy: keyEncodingStrategy),
+                body,
                 timeout: .seconds(5), // Telegram is fast
                 keyEncodingStrategy: .convertToSnakeCase,
                 keyDecodingStrategy: .convertFromSnakeCase,
