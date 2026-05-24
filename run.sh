@@ -253,4 +253,4 @@ fi
 
 # MARK: - Run
 
-swift run
+swift run --run $@
