@@ -265,6 +265,11 @@ public extension URL {
             throw HttpError(statusCode: UInt16(statusCode), message: message)
         }
         
+        log(debug: """
+            Received:
+            \((try? data.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase)) ?? "(not JSON)")
+            """)
+        
         return data
     }
     

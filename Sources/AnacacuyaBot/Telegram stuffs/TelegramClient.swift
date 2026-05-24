@@ -265,18 +265,14 @@ private extension TelegramClient {
         _ body: Body,
         receiving _: Response.Type = Response.self,
     ) async throws -> Response {
-        let url = URL(string: "\(base)/\(method)")!
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try body.jsonData(keyEncodingStrategy: keyEncodingStrategy)
-        
-        log(debug: """
-            POSTing to \(url):
-            \((try? (req.httpBody?.jsonString(dataEncodingStrategy: .base64, keyEncodingStrategy: .convertToSnakeCase) ?? "(null)")) ?? "(not JSON)")
-            """)
-        let (data, _) = try await URLSession.shared.data(for: req)
-        return try unwrap(data)
+        try unwrap(envelope: try await URL(string: "\(base)/\(method)")!
+            .post(
+                try body.jsonData(keyEncodingStrategy: keyEncodingStrategy),
+                timeout: .seconds(5), // Telegram is fast
+                keyEncodingStrategy: .convertToSnakeCase,
+                keyDecodingStrategy: .convertFromSnakeCase,
+            )
+        )
     }
     
     
@@ -296,6 +292,11 @@ private extension TelegramClient {
             throw TelegramHttpError.responseDecodingFailed(data: data, underlying: error)
         }
         
+        return try unwrap(envelope: envelope)
+    }
+    
+    
+    func unwrap<Response: Decodable & Sendable>(envelope: TGResponse<Response>) throws -> Response {
         guard envelope.ok, let result = envelope.result else {
             throw TelegramHttpError.apiError(
                 code: envelope.errorCode,
