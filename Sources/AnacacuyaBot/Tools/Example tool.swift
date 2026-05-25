@@ -31,7 +31,7 @@ public extension BotTool {
             botDidUse: { arguments throws(BotToolError) in
                 guard let arguments else {
                     log(info: "Bot called the example tool with no arguments")
-                    return "Tool call successful! Token: awawa67"
+                    return .text("Tool call successful! Token: awawa67")
                 }
                 
                 for (key, value) in arguments {
@@ -39,11 +39,11 @@ public extension BotTool {
                     case "echo":
                         switch value {
                         case .string(let echoed):
-                            return echoed
+                            return .text(echoed)
                             
                         default:
                             do {
-                                return try value.jsonString()
+                                return .text(try value.jsonString())
                             }
                             catch {
                                 throw .errorForDev(error)
@@ -60,7 +60,7 @@ public extension BotTool {
                     log(warning: "Unsupported argument sent to tool: \"\(key)\": \(value)")
                 }
                 
-                return "BAZ"
+                return .text("BAZ")
             },
         )
     }

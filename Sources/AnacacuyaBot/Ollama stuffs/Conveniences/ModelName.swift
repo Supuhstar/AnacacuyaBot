@@ -44,7 +44,7 @@ public struct ModelName: Sendable {
 // MARK: - parsing
 
 //unsafe: I'm pretty dang sure there's nothing unsafe about this regex
-private nonisolated(unsafe) let regex = /^(?:(?<namespace>[^\/:]+?)\/)?(?<name>[^\/:]+?)(?::(?<tag>[^\/:]+))?$/
+private nonisolated(unsafe) let regex = /^(?:(?<namespace>[^\/:]+(?:\/[^\/:]+)*)+\/)?(?<name>[^\/:]+?)(?::(?<tag>[^\/:]+))?$/
 
 
 
@@ -122,6 +122,13 @@ extension ModelName: Equatable {
     public static func == (lhs: Self, rhs: String?) -> Bool {
         rhs == lhs
     }
+    
+    
+    public static func ===(lhs: Self, rhs: Self) -> Bool {
+        lhs.namespace == rhs.namespace
+            && lhs.name == rhs.name
+            && lhs.tag == rhs.tag
+    }
 }
 
 
@@ -180,7 +187,7 @@ extension ModelName: Decodable {
     
     
     /// An error which might occur while decoding a qualified model name
-    enum DecodeError: Error {
+    public enum DecodeError: Error {
         
         /// The raw string form was malformed (e.g. ends with a colon)
         case malformed

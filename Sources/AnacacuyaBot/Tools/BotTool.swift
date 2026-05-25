@@ -20,6 +20,9 @@ public struct BotTool: Sendable {
     /// Determines whether this tool matches a tool call
     public let matches: Matches
     
+    /// If this tool requires any specific capabilities from the LLM (e.g. it must be able to see images), list them here
+    public let requiredCapabilities: [ModelCapability]?
+    
     
     /// This function is called when the bot has decided to use this tool
     /// 
@@ -30,9 +33,11 @@ public struct BotTool: Sendable {
     
     init(definition: OllamaTool.Function,
          matches: Matches? = nil,
+         requiredCapabilities: [ModelCapability]? = nil,
          botDidUse: @escaping BotDidUse)
     {
         self.definition = definition
+        self.requiredCapabilities = requiredCapabilities
         self.botDidUse = botDidUse
         
         self.matches = matches ?? { toolCall in
@@ -52,7 +57,7 @@ public struct BotTool: Sendable {
     public typealias Definition = OllamaTool.Function
     
     /// A function that's called when the bot uses a tool
-    public typealias BotDidUse = @Sendable (_ arguments: [String : JsonValue]?) async throws(BotToolError) -> String
+    public typealias BotDidUse = @Sendable (_ arguments: [String : JsonValue]?) async throws(BotToolError) -> Result
     
     /// Determines whether a tool matches the LLM's attempt to call a tool
     public typealias Matches = @Sendable (_ toolCall: OllamaToolCall) -> Bool
@@ -67,8 +72,25 @@ public extension BotTool {
     /// - Parameter call: The bot's calling of the tool
     ///
     /// - Returns: The result of calling the tool
-    func run(_ call: OllamaToolCall) async throws(BotToolError) -> String {
+    func run(_ call: OllamaToolCall) async throws(BotToolError) -> Result {
         try await botDidUse(call.function.arguments)
+    }
+    
+    
+    
+    /// The result of a bot tool call
+    struct Result: Sendable {
+        
+        /// The text result of calling the tool
+        let text: String
+        
+        /// Any images the tool produced
+        let images: [Data]?
+        
+        
+        static func text(_ text: String) -> Self { .init(text: text, images: nil) }
+        static func image(_ image: Data) -> Self { .init(text: "", images: [image]) }
+        static func images(_ image: [Data]) -> Self { .init(text: "", images: image) }
     }
 }
 

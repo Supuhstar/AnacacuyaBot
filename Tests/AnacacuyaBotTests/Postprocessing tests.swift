@@ -93,6 +93,20 @@ struct SelfIntroductionTests {
     }
     
     
+    @Test func You() async throws {
+        let example = """
+            You: 
+            What do you need help with? Indrora mentioned some issues with her memory tools. Let's focus on troubleshooting those problems together.
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("""
+                What do you need help with? Indrora mentioned some issues with her memory tools. Let's focus on troubleshooting those problems together.
+                """
+                == postprocessed)
+    }
+    
+    
     @Test func multiYou() async throws {
         let example = """
             you:

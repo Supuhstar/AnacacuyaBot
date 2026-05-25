@@ -45,6 +45,9 @@ public struct ChatMessage: Sendable {
     /// guard against that case before constructing.
     let text: String
     
+    /// Tools that the LLM called in this message, if any
+    let toolCalls: [OllamaToolCall]?
+    
     /// Images attached to this message, pre-processed by a vision model.
     ///
     /// Nil whenever the message is text-only, which is the common case, including every outgoing message the bot itself sends right now.
@@ -60,6 +63,7 @@ public struct ChatMessage: Sendable {
         role: Role,
         isReply: Bool,
         text: String,
+        toolCalls: [OllamaToolCall]?,
         images: [ProcessedImage]? = nil,
     ) {
         self.id = id
@@ -67,6 +71,7 @@ public struct ChatMessage: Sendable {
         self.role = role
         self.isReply = isReply
         self.text = text
+        self.toolCalls = toolCalls
         self.images = images
     }
 }
@@ -92,6 +97,7 @@ public extension ChatMessage {
                 : .user,
             isReply: nil != incomingMessage.replyToMessage,
             text: wholeUserText,
+            toolCalls: nil,
             images: images)
     }
     
@@ -176,17 +182,21 @@ public extension ChatMessage {
 public extension ChatMessage {
     
     /// Constructs a chat message to send to the bot as a way of communicating the result of calling a tool
-    ///
+    ///  
     /// - Parameters:
-    ///   - toolName:   The name of the tool which was called
-    ///   - resultText: The text of the result of the tool call
-    static func toolCallResult(toolName: String, resultText: String) -> Self {
+    ///   - originalToolCall: The original tool call from the LLM
+    ///   - toolName:         The name of the tool which was called
+    ///   - resultText:       The text of the result of the tool call, if any
+    ///   - resultImages:     The images that the tool produced, if any
+    static func toolCallResult(originalToolCall: OllamaToolCall, toolName: String, resultText: String?, resultImages: [ProcessedImage]?) -> Self {
         ChatMessage(
             id: nil,
             sender: .toolCall(toolName: toolName),
             role: .tool,
             isReply: false,
-            text: resultText,
+            text: resultText ?? "",
+            toolCalls: [originalToolCall],
+            images: resultImages,
         )
     }
 }
@@ -225,6 +235,7 @@ extension ChatMessage {
             role: ollamaMessage.role,
             isReply: isReply,
             text: ollamaMessage.content,
+            toolCalls: ollamaMessage.toolCalls,
             images: ollamaMessage.images?.map { imageData in
                 // TODO: Is this the best approach here?
                 ProcessedImage(
@@ -243,6 +254,14 @@ extension ChatMessage {
 extension ChatMessage {
     
     static func system(isReply: Bool = false, text: String, images: [ProcessedImage]? = nil) -> Self {
-        .init(id: nil, sender: .system, role: .system, isReply: isReply, text: text, images: images)
+        .init(
+            id: nil,
+            sender: .system,
+            role: .system,
+            isReply: isReply,
+            text: text,
+            toolCalls: nil,
+            images: images,
+        )
     }
 }

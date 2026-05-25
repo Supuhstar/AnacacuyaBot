@@ -468,8 +468,9 @@ private extension BotRunner {
             sender: await .botUser,
             role: .assistant,
             isReply: nil != repliedToMessage,
-            text: message)
-        )
+            text: message,
+            toolCalls: nil, // Don't need to archive these. Too noisey anyway
+        ))
     }
 }
 
@@ -526,6 +527,44 @@ private extension BotRunner {
         return true == (from.username?.lowercased() == botUsername.lowercased())
     }
 }
+
+
+// MARK: - Refusal detection
+
+private extension OllamaChatResponse {
+    
+    /// The exact text smollm2 emits when it's been handed a tools array
+    /// but the rendered prompt confuses it — typically after a tool
+    /// result is fed back in. It isn't an Ollama-level error: the call
+    /// returns HTTP 200 with `done_reason == "stop"`. It's the model
+    /// itself producing a canned "no applicable function" sentence
+    /// instead of either calling a tool or answering.
+    ///
+    /// This lives here, bot-side and private, rather than in the Ollama
+    /// module on purpose: it's a quirk of one specific small model, not
+    /// a property of the transport. If the model is ever swapped, this
+    /// is the single line to revisit.
+    private static let toolCallRefusalText = [
+        "The given question lacks the parameters required by the function.",
+        "The query cannot be answered with the provided tools.",
+    ]
+    
+    
+    /// Whether this response is smollm2's tool-call refusal pattern —
+    /// no tool calls, and content equal to the known refusal sentence.
+    ///
+    /// Used by ``BotRunner`` to decide a retry is warranted: re-rolling
+    /// the model against the same context will, often enough, land on a
+    /// real tool call or a genuine answer instead. Matching the exact
+    /// sentence is deliberately narrow — a broader "short reply with no
+    /// tool call" heuristic would also catch legitimate terse messages
+    /// and retry them pointlessly.
+    var isToolCallRefusal: Bool {
+        nil == message.toolCalls?.nonEmptyOrNil
+            && Self.toolCallRefusalText.contains(message.content.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
 
 
 // MARK: - Generation
@@ -594,40 +633,55 @@ private extension BotRunner {
     }
     
     
-    /// Tells the LLM to generate a respond to the given context messages, optionally explicitly replying to one.
+    /// Tells the LLM to generate a response to the given context messages, optionally explicitly replying to one.
     ///
     /// Whether this is a direct response or an interjection is inferred
     /// from `inReplyTo`: non-nil means we're answering a specific
     /// message, nil means we're commenting on the conversation overall.
-    /// That distinction is forwarded to ``modelForResponse(to:inReplyTo:)``
-    /// because it changes which model is appropriate — see that method
-    /// for why.
+    ///
+    /// ## The retry tree
+    ///
+    /// A small tool-capable model is an unreliable narrator: given the
+    /// same request twice it may call a tool one time and refuse the
+    /// next, since sampling is non-deterministic. To absorb that, each
+    /// recursion level is a node in a retry tree. A node fails when the
+    /// model returns the tool-call refusal pattern, or when every child
+    /// beneath it has failed. A failed node retries itself up to
+    /// ``Limits/maxToolCallRetries`` times — and because each retry
+    /// re-rolls the model, a retry can call a *different* tool with
+    /// *different* arguments, giving everything downstream genuinely
+    /// fresh input rather than a replay. When a node exhausts its own
+    /// retries it returns failure to its parent, which then spends one
+    /// of its retries. The tree is bounded: depth is capped by
+    /// ``Limits/maxSelfInteractions`` and width by
+    /// ``Limits/maxToolCallRetries``, so the whole search terminates
+    /// after a deterministic number of model calls and, in the worst
+    /// case, the bot simply says nothing.
+    ///
+    /// - Parameters:
+    ///   - context:            The conversation so far, including any tool-call results appended by deeper levels.
+    ///   - toolCallsSoFar:     Depth in the tree — how many tool-call rounds preceded this one. Doubles as the tool-budget counter: once it reaches ``Limits/maxSelfInteractions`` no further tools are offered to the model.
+    ///   - retriesAtThisLevel: How many times this node has already retried. Reset to zero whenever a *new* level is entered, incremented on each same-level retry.
+    ///   - settings:           Model options for the generation.
+    ///   - chatId:             The chat the eventual message belongs to.
+    ///   - state:              The mutating chat state. Mutated only on a successful send, so failed retries leave it untouched.
+    ///   - inReplyTo:          The message ID being replied to, if any.
+    ///
+    /// - Returns: `true` if this node (or some descendant) produced a
+    ///            message — or deliberately chose to stay silent —
+    ///            and `false` if it exhausted its retries without
+    ///            success, signalling its parent to retry.
+    @discardableResult
     private func sendGeneratedResponse(
         context: [ChatMessage],
         toolCallsSoFar: Int = 0,
-        retriesOfThisCallSoFar: Int = 0,
+        retriesAtThisLevel: Int = 0,
         settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
-        inReplyTo targetedMessageId: Int?,
-    ) async {
-        let allowedToCallTools = toolCallsSoFar < Limits.maxSelfInteractions
-        
-        guard retriesOfThisCallSoFar < Limits.maxToolCallRetries else {
-            log(error: "Retried too many times; aborting")
-            
-            if !allowedToCallTools {
-                // we're out of attempts. Tell the end user
-                try? await send(
-                    message: "I don't know what to say.",
-                    inChat: chatId,
-                    replyingTo: targetedMessageId,
-                    chatState: &state,
-                )
-            }
-            
-            return
-        }
+        inReplyTo: Int?,
+    ) async -> Bool {
+        let canCallTools = toolCallsSoFar < Limits.maxSelfInteractions
         
         let reply: OllamaChatResponse
         
@@ -638,88 +692,164 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
-                    tools: allowedToCallTools ? persona.tools.map(OllamaTool.init) : nil,
+                    tools: canCallTools ? persona.tools.map(OllamaTool.init) : nil,
                     settings: settings
                 )
                 .postprocessed()
-            
-            if failedToolCallMessage == reply.message.content {
-                return await sendGeneratedResponse(
-                    context: context,
-                    toolCallsSoFar: toolCallsSoFar,
-                    retriesOfThisCallSoFar: retriesOfThisCallSoFar + 1,
-                    settings: settings,
-                    chatId: chatId,
-                    state: &state,
-                    inReplyTo: targetedMessageId,
-                )
-            }
         }
         catch {
+            // A thrown generation error is itself a failed node: the
+            // model produced nothing usable, so spend a retry exactly
+            // as we would for a refusal.
             log(error: error, "Generation error: \(error)")
-            return
+            return await retryOrFail(
+                context: context,
+                toolCallsSoFar: toolCallsSoFar,
+                retriesAtThisLevel: retriesAtThisLevel,
+                settings: settings,
+                chatId: chatId,
+                state: &state,
+                inReplyTo: inReplyTo,
+            )
+        }
+        
+        // Beyond the root, the refusal pattern means the model got
+        // confused by the tool results it was handed. Retrying re-rolls
+        // it against the same context. At the root there are no tool
+        // results to be confused by, so a refusal-shaped reply there is
+        // taken at face value and sent.
+        if 0 < toolCallsSoFar,
+           reply.isToolCallRefusal
+        {
+            log(info: "Tool-call refusal at level \(toolCallsSoFar); retrying")
+            return await retryOrFail(
+                context: context,
+                toolCallsSoFar: toolCallsSoFar,
+                retriesAtThisLevel: retriesAtThisLevel,
+                settings: settings,
+                chatId: chatId,
+                state: &state,
+                inReplyTo: inReplyTo,
+            )
         }
         
         if let toolCalls = reply.message.toolCalls?.nonEmptyOrNil {
-            await runToolCalls(
+            let childSucceeded = await runToolCalls(
                 toolCalls,
                 from: reply,
                 context: context,
                 toolCallsSoFar: toolCallsSoFar,
-                retriesOfThisCallSoFar: retriesOfThisCallSoFar,
                 settings: settings,
                 chatId: chatId,
                 state: &state,
-                inReplyTo: targetedMessageId,
+                inReplyTo: inReplyTo,
+            )
+            
+            if childSucceeded {
+                return true
+            }
+            
+            // Every child beneath this node failed. Spend one of this
+            // node's retries: re-rolling here may produce a different
+            // tool call, which gives the children new input to work
+            // with.
+            return await retryOrFail(
+                context: context,
+                toolCallsSoFar: toolCallsSoFar,
+                retriesAtThisLevel: retriesAtThisLevel,
+                settings: settings,
+                chatId: chatId,
+                state: &state,
+                inReplyTo: inReplyTo,
             )
         }
         else {
+            // A non-refusal reply with no tool calls is the model
+            // simply talking. Send it and consider this node resolved.
             do {
                 try await send(
                     message: reply.message.content,
                     inChat: chatId,
-                    replyingTo: targetedMessageId,
+                    replyingTo: inReplyTo,
                     chatState: &state,
                 )
             }
             catch {
                 log(error: error, "Failed to send generated reply")
-                
-                
             }
+            return true
         }
     }
-}
-
-
-
-// MARK: - Tool use
-
-/// If Ollama responds with this, the tool call failed.
-///
-/// It sends this with an HTTP 200 and `"done_reason":"stop"`, so matching against this string is the only way we can tell if it failed
-private let failedToolCallMessage = "The given question lacks the parameters required by the function."
-
-
-
-private extension BotRunner {
     
+    
+    /// Spends one same-level retry of ``sendGeneratedResponse(context:toolCallsSoFar:retriesAtThisLevel:settings:chatId:state:inReplyTo:)``,
+    /// or reports definitive failure once the per-level budget is spent.
+    ///
+    /// Centralizing the budget check here keeps the two failure paths
+    /// in `sendGeneratedResponse` — a refusal, and an all-children-failed
+    /// subtree — from each carrying their own copy of the guard.
+    ///
+    /// - Returns: The retried node's result, or `false` when no retries
+    ///            remain at this level.
+    private func retryOrFail(
+        context: [ChatMessage],
+        toolCallsSoFar: Int,
+        retriesAtThisLevel: Int,
+        settings: OllamaModelOptions?,
+        chatId: Int64,
+        state: inout ChatState,
+        inReplyTo: Int?,
+    ) async -> Bool {
+        guard retriesAtThisLevel < Limits.maxToolCallRetries else {
+            log(warning: "Exhausted retries at interaction level \(toolCallsSoFar)")
+            return false
+        }
+        
+        return await sendGeneratedResponse(
+            context: context,
+            toolCallsSoFar: toolCallsSoFar,
+            retriesAtThisLevel: retriesAtThisLevel + 1,
+            settings: settings,
+            chatId: chatId,
+            state: &state,
+            inReplyTo: inReplyTo,
+        )
+    }
+    
+    
+    /// Executes the tools the model asked for, appends their results to
+    /// the context, and recurses one level deeper to let the model
+    /// continue with what the tools returned.
+    ///
+    /// This is the edge between two tree nodes: the calling
+    /// ``sendGeneratedResponse(context:toolCallsSoFar:retriesAtThisLevel:settings:chatId:state:inReplyTo:)``
+    /// node delegates here, and here delegates to the next-deeper node.
+    /// The deeper node starts with a fresh retry budget; its eventual
+    /// success or failure is handed straight back so the caller can
+    /// decide whether to spend one of *its* retries.
+    ///
+    /// A tool the model named but the persona doesn't offer isn't a
+    /// failure — the model is told "you don't have that tool" as a
+    /// tool result and gets to continue, which often recovers better
+    /// than aborting. A genuine `errorForDev` from a tool, by contrast,
+    /// is unrecoverable: the bot reports a critical error and the node
+    /// resolves as "handled" so the tree stops rather than retrying a
+    /// deterministic failure.
+    ///
+    /// - Returns: Whether the recursion beneath this call ultimately
+    ///            produced a message. Propagated upward unchanged so a
+    ///            failed subtree triggers a retry at the parent.
     func runToolCalls(
         _ toolCalls: [OllamaToolCall],
         from caller: OllamaChatResponse,
         context: [ChatMessage],
         toolCallsSoFar: Int,
-        retriesOfThisCallSoFar: Int,
         settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
-        inReplyTo targetedMessageId: Int?,
-    ) async {
-        typealias CalledTool = (tool: BotTool, request: OllamaToolCall)
-        
-        
-        
-        let callerMessage = await ChatMessage(caller.message, isReply: true)
+        inReplyTo: Int?,
+    ) async -> Bool {
+        let callerMessage = await ChatMessage(caller.message, isReply: false)
         
         let calledTools: [CalledTool]? = toolCalls.compactMap { calledTool in
                 let availableTool = persona.tools.first { availableTool in
@@ -727,7 +857,7 @@ private extension BotRunner {
                 }
                 
                 if let availableTool {
-                    return (tool: availableTool, request: calledTool)
+                    return (tool: availableTool, call: calledTool)
                 }
                 else {
                     return nil
@@ -738,65 +868,41 @@ private extension BotRunner {
         if let calledTools {
             do {
                 let toolCallResultContext = try await calledTools.async.reduce(into: [ChatMessage]()) { toolCallResultContext, calledTool in
-                        let calledToolName = calledTool.request.function.name
-                        log(info: "Called tool \(calledToolName)")
-                        
-                        
-                        func callTool() async throws -> ChatMessage? {
-                            do {
-                                let toolCallResult = try await calledTool.tool.run(calledTool.request)
-                                return .toolCallResult(
-                                    toolName: calledToolName,
-                                    resultText: toolCallResult,
-                                )
-                            }
-                            catch {
-                                switch error {
-                                case .errorForBot(problemDescription: let problemDescription):
-                                    return .toolCallResult(
-                                        toolName: calledToolName,
-                                        resultText: """
-                                                `\(calledToolName)` failed: \(problemDescription)
-                                                """,
-                                    )
-                                    
-                                case .errorForDev(let error):
-                                    log(error: error, "Failed to call tool \(calledToolName)")
-                                    throw error
-                                }
-                            }
-                        }
-                        
-                        
-                        if let toolResult = try await callTool() {
+                        if let toolResult = try await callTool(calledTool) {
                             toolCallResultContext.append(callerMessage)
                             toolCallResultContext.append(toolResult)
                         }
                     }
                 
-                await sendGeneratedResponse(
+                return await sendGeneratedResponse(
                     context: context + toolCallResultContext,
                     toolCallsSoFar: toolCallsSoFar + 1,
                     settings: settings,
                     chatId: chatId,
                     state: &state,
-                    inReplyTo: targetedMessageId,
+                    inReplyTo: inReplyTo,
                 )
             }
             catch {
+                // An `errorForDev` escaped tool execution. This is a
+                // deterministic failure — retrying would only repeat
+                // it — so the bot reports it and the node resolves as
+                // "handled" to halt the tree.
                 log(error: error, "Failed to call tools, aborting")
                 
                 do {
                     try await send(
                         message: "[system] ❌ Critical error",
                         inChat: chatId,
-                        replyingTo: targetedMessageId,
+                        replyingTo: inReplyTo,
                         chatState: &state,
                     )
                 }
                 catch {
                     log(error: "Couldn't even fuckin send an error message to Telegram ☹️")
                 }
+                
+                return true
             }
         }
         else {
@@ -806,22 +912,65 @@ private extension BotRunner {
             let fakeToolCallContext: [ChatMessage] = [
                 callerMessage,
                 .toolCallResult(
+                    originalToolCall: .init(function: .init(name: "tool_not_found")),
                     toolName: "Tool not found",
                     resultText: """
                         You don't have access to the \(requestedToolNames.joined(separator: ", ")) tool\(requestedToolNames.count == 1 ? "" : "s")
                         """,
+                    resultImages: nil,
                 )
             ]
             
-            await sendGeneratedResponse(
+            return await sendGeneratedResponse(
                 context: context + fakeToolCallContext,
                 toolCallsSoFar: toolCallsSoFar + 1,
                 settings: settings,
                 chatId: chatId,
                 state: &state,
-                inReplyTo: targetedMessageId,
+                inReplyTo: inReplyTo,
             )
         }
+    }
+    
+    
+    
+    typealias CalledTool = (tool: BotTool, call: OllamaToolCall)
+    
+    
+    
+    func callTool(_ calledTool: CalledTool) async throws -> ChatMessage? {
+        let calledToolName = calledTool.call.function.name
+        log(info: "Called tool \(calledToolName)")
+        
+        let toolCallResult: BotTool.Result
+        
+        do {
+            toolCallResult = try await calledTool.tool.run(calledTool.call)
+        }
+        catch {
+            switch error {
+            case .errorForBot(problemDescription: let problemDescription):
+                return .toolCallResult(
+                    originalToolCall: calledTool.call,
+                    toolName: calledToolName,
+                    resultText: """
+                                                `\(calledToolName)` failed: \(problemDescription)
+                                                """,
+                    resultImages: nil,
+                )
+                
+            case .errorForDev(let error):
+                log(error: error, "Failed to call tool \(calledToolName)")
+                throw error
+            }
+        }
+        
+        return .toolCallResult(
+            originalToolCall: calledTool.call,
+            toolName: calledToolName,
+            resultText: toolCallResult.text,
+            resultImages: try await toolCallResult.images?.processedImages(using: models.vision, in: ollama),
+        )
     }
     
     

@@ -46,6 +46,7 @@ extension Substring {
         let keepRef = Reference(Substring.self)
         
         let regex = selfIntroductionRegex(botUsername: botUsername, keepRef: keepRef)
+            .regex.ignoresCase()
         
         return self.firstMatch(of: regex).map { $0[keepRef] } ?? self
     }
@@ -72,10 +73,11 @@ extension Substring {
     
     
     private var startsWithYou: some RegexComponent {
-        OneOrMore {
-            "you:"
-            One(.newlineSequence)
-        }
+        /(?:[Yy]ou:\s*\n)+/
+//        OneOrMore {
+//            ChoiceOf{"Y";"y"};"ou:"
+//            One(.newlineSequence)
+//        }.regex.ignoresCase()
     }
     
     

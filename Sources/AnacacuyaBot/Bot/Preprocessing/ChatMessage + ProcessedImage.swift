@@ -44,6 +44,7 @@ public extension ChatMessage.ProcessedImage {
 
 
 extension Data {
+    
     /// Runs the given vision model in the given Ollama instance to describe this image (assuming this `Data` represents an image)
     ///
     /// - Parameters:
@@ -57,13 +58,16 @@ extension Data {
 
 
 extension [Data] {
+    
     /// Runs the given vision model in the given Ollama instance to describe these image (assuming these `Data` represent an image)
     ///
     /// - Parameters:
     ///   - visionModel: The vision model which will describe the image
     ///   - ollama:      The Ollama instance which will run the vision mdoel
-    func processedImages(using visionModel: OllamaModel, in ollama: Ollama) async throws -> [ChatMessage.ProcessedImage] {
-        try await self
+    func processedImages(using visionModel: OllamaModel?, in ollama: Ollama) async throws -> [ChatMessage.ProcessedImage] {
+        guard let visionModel else { return map { .init(rawData: $0, visionModelDescription: "") } }
+        
+        return try await self
             .async
             .map {
                 try await $0.processedImage(using: visionModel, in: ollama)
