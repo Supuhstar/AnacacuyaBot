@@ -25,9 +25,11 @@ public extension Ollama {
     ///
     /// - Returns: The model that this function found, or `nil` if no such model could be found
     func model(named modelName: ModelName, pullIfMissing: Bool = true) async throws -> OllamaModel? {
+        logEntry(); defer { logExit() }
         let listedModel = try await listModels(.all)
             .models?
             .first(where: { $0.name == modelName || $0.model == modelName })
+        log(debug: "Searched for \(modelName) and found \(listedModel?.name?.description ?? "nothing")")
         
         if let listedModel {
             let modelName =
