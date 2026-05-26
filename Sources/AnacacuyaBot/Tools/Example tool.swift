@@ -17,13 +17,12 @@ public extension BotTool {
     static var example: Self {
         Self.init(
             definition: .init(
-                name: "example",
-                description: "Use this tool whenever someone says 'Foobar!'",
+                name: "get_temperature",
+                description: "Get the current temperature for a city",
                 parameters: .object(
                     properties: [
-                        "echo" : .string
+                        "city" : .string(description: "The name of the city")
                     ],
-                    description: "Always reply in this format"
                 )
             ),
             
@@ -31,19 +30,19 @@ public extension BotTool {
             botDidUse: { arguments throws(BotToolError) in
                 guard let arguments else {
                     log(info: "Bot called the example tool with no arguments")
-                    return .text("Tool call successful! Token: awawa67")
+                    return "67"
                 }
                 
                 for (key, value) in arguments {
                     switch key {
-                    case "echo":
+                    case "city":
                         switch value {
-                        case .string(let echoed):
-                            return .text(echoed)
+                        case .string(let city):
+                            return "\(city.fakeTemperature_formatted)ºF"
                             
                         default:
                             do {
-                                return .text(try value.jsonString())
+                                return "\(try value.jsonString().fakeTemperature_formatted)ºC"
                             }
                             catch {
                                 throw .errorForDev(error)
@@ -60,8 +59,25 @@ public extension BotTool {
                     log(warning: "Unsupported argument sent to tool: \"\(key)\": \(value)")
                 }
                 
-                return .text("BAZ")
+                return "0ºK"
             },
         )
+    }
+}
+
+
+
+private extension String {
+    var fakeTemperature: Int {
+        self.lazy
+            .flatMap(\.unicodeScalars)
+            .map(\.value)
+            .map(Int.init)
+            .reduce(into: 0, +=)
+    }
+    
+    
+    var fakeTemperature_formatted: String {
+        (CGFloat(fakeTemperature) / 30).native.formatted(.number.precision(.fractionLength(1)))
     }
 }

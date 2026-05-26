@@ -96,6 +96,19 @@ public extension BotTool {
 
 
 
+extension BotTool.Result: ExpressibleByStringLiteral, ExpressibleByStringInterpolation {
+    public init(stringLiteral value: StringLiteralType) {
+        self.init(text: value, images: nil)
+    }
+    
+    
+    public init(stringInterpolation: DefaultStringInterpolation) {
+        self.init(text: stringInterpolation.description, images: nil)
+    }
+}
+
+
+
 /// An error that can be thrown from a bot tool running
 public enum BotToolError: Error {
     
