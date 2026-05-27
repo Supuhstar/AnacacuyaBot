@@ -16,3 +16,16 @@ func setUpBot() async {
         TGUser.botUser = TGUser(id: 420, isBot: true, firstName: "Luna", username: "AnacacuyaBot")
     }
 }
+
+
+
+// MARK: - Test Persona
+
+extension Persona {
+    static let test = Persona(
+        name: "Test Persona",
+        directResponseSystemPrompt: "",
+        interjectionSystemPrompt: "",
+        tools: [],
+    )
+}

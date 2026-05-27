@@ -13,11 +13,13 @@ public extension OllamaChatResponse {
     
     /// Runs postprocessing on this bot response to make it good enough to send to the user
     ///
+    /// - Parameter persona: The persona that the bot responded as
+    ///
     /// - Returns: The bot's response, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> Self {
+    func postprocessed(as persona: Persona) -> Self {
         var copy = self
-        copy.message = message.postprocessed()
+        copy.message = message.postprocessed(as: persona)
         return copy
     }
 }
@@ -28,12 +30,14 @@ public extension OllamaMessage {
     
     /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
+    /// - Parameter persona: The persona that the bot responded as
+    ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> Self {
+    func postprocessed(as persona: Persona) -> Self {
         var copy = self
         
-        switch content.postprocessed() {
+        switch content.postprocessed(as: persona) {
         case .string(let content):
             copy.content = content
             
@@ -51,11 +55,13 @@ public extension String {
     
     /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
+    /// - Parameter persona: The persona that the bot responded as
+    ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> PostprocessedString {
+    func postprocessed(as persona: Persona) -> PostprocessedString {
         self[...]
-            .postprocessed()
+            .postprocessed(as: persona)
     }
 }
 
@@ -65,19 +71,21 @@ public extension Substring {
     
     /// Runs postprocessing on this bot message to make it good enough to send to the user
     ///
+    /// - Parameter persona: The persona that the bot responded as
+    ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> PostprocessedString {
+    func postprocessed(as persona: Persona) -> PostprocessedString {
         if let toolCall = self.asOllamaToolCall() {
             .toolCall(toolCall)
         }
         else {
             .string(self
-                .removingSelfIntroduction()
+                .removingSelfIntroduction(personaName: persona.name)
                 .removingFakeChatLogs()
                 .removingWholeMessageQuotes()
                 .removingFilenameTag()
-                .removingSelfIntroduction()
+                .removingSelfIntroduction(personaName: persona.name)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             )
         }

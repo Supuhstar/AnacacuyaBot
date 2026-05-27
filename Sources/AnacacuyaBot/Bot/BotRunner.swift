@@ -722,7 +722,7 @@ private extension BotRunner {
                     tools: canCallTools ? persona.tools.map(OllamaTool.init) : nil,
                     settings: settings
                 )
-                .postprocessed()
+                .postprocessed(as: persona)
             
             log(verbose: "Processed reply from LLM: \(reply)")
         }

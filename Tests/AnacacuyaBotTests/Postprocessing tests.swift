@@ -17,7 +17,7 @@ struct NoOpTests {
     
     @Test func emptyString() async throws {
         let example = ""
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect(postprocessed == example)
     }
     
@@ -26,7 +26,16 @@ struct NoOpTests {
         let example = """
             I think that's just how it was back in the day; I mean, this is 1980s technology we're talking about here.
             """
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
+        #expect(postprocessed == example)
+    }
+    
+    
+    @Test func acceptableColonPrefix() async throws {
+        let example = """
+            It's simple really: We long for the times we once had.
+            """
+        let postprocessed = await example.postprocessed(as: .test)
         #expect(postprocessed == example)
     }
 }
@@ -47,7 +56,7 @@ struct PostprocessingCombinationsTests {
             "@AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts."
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
             Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
             """
@@ -71,7 +80,7 @@ struct SelfIntroductionTests {
             @AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
             Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
             """
@@ -85,7 +94,7 @@ struct SelfIntroductionTests {
             :) Yeah, that's true, it does have an old-world charm to it. The bicycle stands out against the modern buildings, and the cobblestones are really cool. It feels like a different era.
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
             :) Yeah, that's true, it does have an old-world charm to it. The bicycle stands out against the modern buildings, and the cobblestones are really cool. It feels like a different era.
             """
@@ -99,7 +108,7 @@ struct SelfIntroductionTests {
             What do you need help with? Indrora mentioned some issues with her memory tools. Let's focus on troubleshooting those problems together.
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
                 What do you need help with? Indrora mentioned some issues with her memory tools. Let's focus on troubleshooting those problems together.
                 """
@@ -113,7 +122,7 @@ struct SelfIntroductionTests {
             
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("" == postprocessed)
     }
     
@@ -125,9 +134,48 @@ struct SelfIntroductionTests {
             *raises eyebrows and chortles quietly to himself* Ah, @dogval. Your responses never fail to bring a smile to my face. 😄
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
             *raises eyebrows and chortles quietly to himself* Ah, @dogval. Your responses never fail to bring a smile to my face. 😄
+            """
+            == postprocessed)
+    }
+    
+    
+    @Test func personaName() async throws {
+        let example = """
+            Test Persona: Hey Val, hi! How are you doing?
+            """
+        
+        let postprocessed = await example.postprocessed(as: .test)
+        #expect("""
+            Hey Val, hi! How are you doing?
+            """
+            == postprocessed)
+    }
+    
+    
+    @Test func personaFirstName() async throws {
+        let example = """
+            Test: @KyNorthstar, I'm awake. What's going on?
+            """
+        
+        let postprocessed = await example.postprocessed(as: .test)
+        #expect("""
+            @KyNorthstar, I'm awake. What's going on?
+            """
+            == postprocessed)
+    }
+    
+    
+    @Test func personaLastName() async throws {
+        let example = """
+            Persona: Oh no, I'm sorry to hear that. Take your time if you need any more rest or support.
+            """
+        
+        let postprocessed = await example.postprocessed(as: .test)
+        #expect("""
+            Oh no, I'm sorry to hear that. Take your time if you need any more rest or support.
             """
             == postprocessed)
     }
@@ -152,7 +200,7 @@ struct FakeChatLogRemovalTests {
             4. AnacacuyaBot reflects, stating that it's all a part of life and universe.
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("it's all in the universe, right?" == postprocessed)
     }
     
@@ -176,7 +224,7 @@ struct FakeChatLogRemovalTests {
             yeah, thanks for offering @djeidragon
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("""
             Sorry about that, @ninedd.
             
@@ -197,7 +245,7 @@ struct FakeChatLogRemovalTests {
             https://github.com/NousResearch/hermes-agent/blob/main/skills/apple/apple-reminders/SKILL.md
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("" == postprocessed)
     }
     
@@ -222,7 +270,7 @@ struct FakeChatLogRemovalTests {
             it looks like a map from 1976 or something?
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect("" == postprocessed)
     }
 }
@@ -236,7 +284,7 @@ struct ToolCallTests {
     @Test func justFunction() async throws {
         let example = "tool\n</tool_call>\n{\"name\": \"get_temperature\", \"arguments\": {\"city\":\"Atlanta\"}}\n</tool_call>"
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect(OllamaToolCall(function: .init(
                 name: "get_temperature",
                 description: nil,
@@ -259,7 +307,7 @@ struct ToolCallTests {
             }
             """
         
-        let postprocessed = await example.postprocessed()
+        let postprocessed = await example.postprocessed(as: .test)
         #expect(OllamaToolCall(function: .init(
                 name: "stablediffusion",
                 description: nil,

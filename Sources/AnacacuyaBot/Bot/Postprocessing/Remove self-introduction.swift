@@ -18,13 +18,16 @@ internal extension Substring {
     /// Here's a real example:
     /// > "@AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts."
     ///
+    /// - Parameters:
+    ///   - personaName: The name used in current persona that the bot sent the message as
+    ///
     /// - Returns: The message without the initial introduction, if'n it has one
     @MainActor
-    func removingSelfIntroduction() -> Substring {
+    func removingSelfIntroduction(personaName: String?) -> Substring {
         guard let botUsername = TGUser.botUser.username else {
             fatalError("Bot shouldn't be able to run without a username")
         }
-        return removingSelfIntroduction(botUsername: botUsername)
+        return removingSelfIntroduction(botUsername: botUsername, personaName: personaName)
     }
     
     
@@ -39,20 +42,32 @@ internal extension Substring {
     ///
     /// This function addresses both of those
     ///
-    /// - Parameter botUsername: The username of the bot (without an @)
+    /// - Parameters:
+    ///   - botUsername: The bot's @username (without the @)
+    ///   - personaName: The name used in current persona that the bot sent the message as
     ///
     /// - Returns: The message without the initial introduction, if'n it has one
-    func removingSelfIntroduction(botUsername: String) -> Substring {
+    func removingSelfIntroduction(botUsername: String, personaName: String?) -> Substring {
         let keepRef = Reference(Substring.self)
         
-        let regex = selfIntroductionRegex(botUsername: botUsername, keepRef: keepRef)
+        let regex = selfIntroductionRegex(
+            botUsername: botUsername,
+            personaName: personaName,
+            keepRef: keepRef,
+        )
             .regex.ignoresCase()
         
         return self.firstMatch(of: regex).map { $0[keepRef] } ?? self
     }
     
     
-    private func selfIntroductionRegex(botUsername: String, keepRef: Reference<Substring>) -> some RegexComponent {
+    /// Builds a regex which can isolate and remove the bot introducing itself at the start of messages (usually `you:`, `@BotUsername:`, or `Persona Name:`)
+    ///
+    /// - Parameters:
+    ///   - botUsername: The bot's @username (without the @)
+    ///   - personaName: The name used in current persona that the bot sent the message as
+    ///   - keepRef:     A reference to the part of the regex to capture as the part to keep
+    private func selfIntroductionRegex(botUsername: String, personaName: String?, keepRef: Reference<Substring>) -> some RegexComponent {
         Regex {
             Anchor.startOfSubject
             Optionally {
@@ -60,6 +75,7 @@ internal extension Substring {
                     startsWithYou
                     usernameIntroductionRegex(botUsername)
                     userIntroductionRegex(botUsername)
+                    personaIntroductionRegex(personaName)
                 }
                 
                 ZeroOrMore(.whitespace)
@@ -92,6 +108,68 @@ internal extension Substring {
         Regex {
             Optionally { OneOrMore(.anyNonNewline); " " }
             "(@"; username; "):"
+        }
+    }
+    
+    
+    private func personaIntroductionRegex(_ personaName: String?) -> any RegexComponent {
+        if let personaName {
+            return Regex {
+                Optionally { OneOrMore(.anyNonNewline); " " }
+                
+                personaIntroductionRegex(unparsedName: personaName); /:[\s\n]*/
+            }
+        }
+        else {
+            return /\w+:/
+        }
+    }
+    
+    
+    private func personaIntroductionRegex(unparsedName: String) -> any RegexComponent {
+        let names = unparsedName.split(separator: /\s+/)
+        
+        if let firstName = names.first {
+            if let lastName = names.last,
+               lastName != firstName
+            {
+                return personaIntroductionRegex(
+                    fullName: unparsedName,
+                    firstName: firstName,
+                    lastName: lastName,
+                )
+            }
+            else {
+                return personaIntroductionRegex(fullName: unparsedName, firstName: firstName)
+            }
+        }
+        else {
+            return personaIntroductionRegex(fullName: unparsedName)
+        }
+    }
+    
+    
+    @RegexComponentBuilder
+    private func personaIntroductionRegex(fullName: String) -> some RegexComponent {
+        fullName
+    }
+    
+    
+    @RegexComponentBuilder
+    private func personaIntroductionRegex(fullName: String, firstName: Substring) -> some RegexComponent {
+        ChoiceOf {
+            firstName
+            fullName
+        }
+    }
+    
+    
+    @RegexComponentBuilder
+    private func personaIntroductionRegex(fullName: String, firstName: Substring, lastName: Substring) -> some RegexComponent {
+        ChoiceOf {
+            firstName
+            fullName
+            lastName
         }
     }
 }

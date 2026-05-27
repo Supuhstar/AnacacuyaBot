@@ -59,26 +59,44 @@ extension Persona {
 /// — better expressed as a flat transcript with explicit framing,
 /// because replaying as turns invites the model to continue the last
 /// speaker rather than comment.
-struct Persona: Sendable {
+public struct Persona: Sendable {
     
-    var name: String? = nil
-    var pronouns: String? = nil
-    var fursona: String? = nil
+    public let name: String?
+    public let pronouns: String?
+    public let fursona: String?
     
     /// The low-level settings for the model that'll be running the persona
-    var modelSettings: OllamaModelOptions? = nil
+    public let modelSettings: OllamaModelOptions?
     
     /// System prompt for direct responses. Sets the voice for replies
     /// that participate in turn-taking dialogue.
-    let directResponseSystemPrompt: String
+    public let directResponseSystemPrompt: String
 
     /// System prompt for unprompted interjections. Stricter framing
     /// because the model must understand it's commenting on a
     /// conversation rather than continuing one.
-    let interjectionSystemPrompt: String
+    public let interjectionSystemPrompt: String
     
     /// The tools that this persona allows
-    let tools: [BotTool]
+    public let tools: [BotTool]
+    
+    
+    public init(name: String? = nil,
+         pronouns: String? = nil,
+         fursona: String? = nil,
+         modelSettings: OllamaModelOptions? = nil,
+         directResponseSystemPrompt: String,
+         interjectionSystemPrompt: String,
+         tools: [BotTool],
+    ) {
+        self.name = name
+        self.pronouns = pronouns
+        self.fursona = fursona
+        self.modelSettings = modelSettings
+        self.directResponseSystemPrompt = directResponseSystemPrompt
+        self.interjectionSystemPrompt = interjectionSystemPrompt
+        self.tools = tools
+    }
     
     
     /// Composes the messages that you can send to Ollama to give the model all the context it needs for a response.
