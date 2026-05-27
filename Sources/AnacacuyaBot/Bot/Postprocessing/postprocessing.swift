@@ -32,7 +32,15 @@ public extension OllamaMessage {
     @MainActor
     func postprocessed() -> Self {
         var copy = self
-        copy.content = content.postprocessed()
+        
+        switch content.postprocessed() {
+        case .string(let content):
+            copy.content = content
+            
+        case .toolCall(let ollamaToolCall):
+            copy.toolCalls = (copy.toolCalls ?? []) + [ollamaToolCall]
+        }
+        
         return copy
     }
 }
@@ -45,7 +53,7 @@ public extension String {
     ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> String {
+    func postprocessed() -> PostprocessedString {
         self[...]
             .postprocessed()
     }
@@ -59,14 +67,65 @@ public extension Substring {
     ///
     /// - Returns: The bot's message, postprocessed to remove unwanted artifacts
     @MainActor
-    func postprocessed() -> String {
-        self
-            .removingSelfIntroduction()
-            .removingFakeChatLogs()
-            .removingWholeMessageQuotes()
-            .removingFilenameTag()
-            .removingSelfIntroduction()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    func postprocessed() -> PostprocessedString {
+        if let toolCall = self.asOllamaToolCall() {
+            .toolCall(toolCall)
+        }
+        else {
+            .string(self
+                .removingSelfIntroduction()
+                .removingFakeChatLogs()
+                .removingWholeMessageQuotes()
+                .removingFilenameTag()
+                .removingSelfIntroduction()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+    }
+}
+
+
+
+public enum PostprocessedString: Sendable, Equatable {
+    case string(String)
+    case toolCall(OllamaToolCall)
+}
+
+
+
+public extension PostprocessedString {
+    static func == <LHS: StringProtocol> (lhs: LHS, rhs: Self) -> Bool {
+        switch rhs {
+        case .string(let string):
+            lhs.description == string
+            
+        case .toolCall(_):
+            false
+        }
+    }
+    
+    
+    static func == <RHS: StringProtocol> (lhs: Self, rhs: RHS) -> Bool {
+        rhs == lhs
+    }
+}
+
+
+
+public extension PostprocessedString {
+    static func == (lhs: OllamaToolCall, rhs: Self) -> Bool {
+        switch rhs {
+        case .string(_):
+            false
+            
+        case .toolCall(let ollamaToolCall):
+            lhs == ollamaToolCall
+        }
+    }
+    
+    
+    static func == (lhs: Self, rhs: OllamaToolCall) -> Bool {
+        rhs == lhs
     }
 }
 

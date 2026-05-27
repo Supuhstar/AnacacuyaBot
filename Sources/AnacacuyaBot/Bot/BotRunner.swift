@@ -370,7 +370,13 @@ private extension BotRunner {
             for response in try await command.run(arguments: arguments, remainingText: wholeUserText, context: commandContext) {
                 switch response {
                 case .message(let response):
-                    try await send(message: response, inChat: incomingMessage.chat.id, replyingTo: incomingMessage.id, chatState: &state)
+                    try await send(
+                        message: response,
+                        image: nil,
+                        inChat: incomingMessage.chat.id,
+                        replyingTo: incomingMessage.id,
+                        chatState: &state,
+                    )
                 }
             }
             
@@ -435,12 +441,14 @@ private extension BotRunner {
     
     func send(
         message: ChatMessage,
+        image: Data?,
         inChat chatId: TGChat.ID,
         replyingTo repliedToMessage: TGMessage.ID?,
         chatState state: inout ChatState,
     ) async throws {
         try await send(
             message: message.text,
+            image: image,
             inChat: chatId,
             replyingTo: repliedToMessage,
             chatState: &state
@@ -450,16 +458,35 @@ private extension BotRunner {
     
     func send(
         message: String,
+        image: Data?,
         inChat chatId: TGChat.ID,
         replyingTo repliedToMessage: TGMessage.ID?,
         chatState state: inout ChatState,
     ) async throws {
         guard false == message.isEmpty else { return }
         
-        try await telegram.sendMessage(
-            chatId: chatId,
-            text: message.telegram_escapedForMarkdownV2,
-            inReplyTo: repliedToMessage)
+        
+        if let image {
+            let name: String = if let persona_name = persona.name {
+                    persona_name
+                }
+                else {
+                    await TGUser.botUser.nameForLlm
+                }
+            
+            try await telegram.send(
+                photo: TGPhotoToSend.bytes(image, filename: "A gift from \(name).png"),
+                caption: message.telegram_escapedForMarkdownV2,
+                inChat: chatId,
+                replyingTo: repliedToMessage,
+            )
+        }
+        else {
+            try await telegram.sendMessage(
+                chatId: chatId,
+                text: message.telegram_escapedForMarkdownV2,
+                inReplyTo: repliedToMessage)
+        }
         
         await limiter.registerDidSendMessage()
         
@@ -696,6 +723,8 @@ private extension BotRunner {
                     settings: settings
                 )
                 .postprocessed()
+            
+            log(verbose: "Processed reply from LLM: \(reply)")
         }
         catch {
             // A thrown generation error is itself a failed node: the
@@ -721,7 +750,7 @@ private extension BotRunner {
         if 0 < toolCallsSoFar,
            reply.isToolCallRefusal
         {
-            log(info: "Tool-call refusal at level \(toolCallsSoFar); retrying")
+            log(error: "Tool-call refusal at level \(toolCallsSoFar); retrying...")
             return await retryOrFail(
                 context: context,
                 toolCallsSoFar: toolCallsSoFar,
@@ -734,6 +763,8 @@ private extension BotRunner {
         }
         
         if let toolCalls = reply.message.toolCalls?.nonEmptyOrNil {
+            log(debug: "Got \(toolCalls.count) tool calls")
+            
             let childSucceeded = await runToolCalls(
                 toolCalls,
                 from: reply,
@@ -746,29 +777,35 @@ private extension BotRunner {
             )
             
             if childSucceeded {
+                log(debug: "Tool-call succeeded; popping stack")
                 return true
             }
-            
-            // Every child beneath this node failed. Spend one of this
-            // node's retries: re-rolling here may produce a different
-            // tool call, which gives the children new input to work
-            // with.
-            return await retryOrFail(
-                context: context,
-                toolCallsSoFar: toolCallsSoFar,
-                retriesAtThisLevel: retriesAtThisLevel,
-                settings: settings,
-                chatId: chatId,
-                state: &state,
-                inReplyTo: inReplyTo,
-            )
+            else {
+                log(error: "Tool-call failed; retrying...")
+                
+                // Every child beneath this node failed. Spend one of this
+                // node's retries: re-rolling here may produce a different
+                // tool call, which gives the children new input to work
+                // with.
+                return await retryOrFail(
+                    context: context,
+                    toolCallsSoFar: toolCallsSoFar,
+                    retriesAtThisLevel: retriesAtThisLevel,
+                    settings: settings,
+                    chatId: chatId,
+                    state: &state,
+                    inReplyTo: inReplyTo,
+                )
+            }
         }
         else {
+            log(debug: "Sending normal reply to chat")
             // A non-refusal reply with no tool calls is the model
             // simply talking. Send it and consider this node resolved.
             do {
                 try await send(
                     message: reply.message.content,
+                    image: reply.message.images?.first,
                     inChat: chatId,
                     replyingTo: inReplyTo,
                     chatState: &state,
@@ -849,6 +886,7 @@ private extension BotRunner {
         state: inout ChatState,
         inReplyTo: Int?,
     ) async -> Bool {
+        logEntry(); defer { logExit() }
         let callerMessage = await ChatMessage(caller.message, isReply: false)
         
         let calledTools: [CalledTool]? = toolCalls.compactMap { calledTool in
@@ -893,6 +931,7 @@ private extension BotRunner {
                 do {
                     try await send(
                         message: "[system] ❌ Critical error",
+                        image: nil,
                         inChat: chatId,
                         replyingTo: inReplyTo,
                         chatState: &state,

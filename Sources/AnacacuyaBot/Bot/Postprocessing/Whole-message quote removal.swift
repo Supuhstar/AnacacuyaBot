@@ -9,7 +9,7 @@ import Foundation
 
 
 
-public extension Substring {
+internal extension Substring {
     
     /// Removes quotation marks from the start and end of the message.
     ///

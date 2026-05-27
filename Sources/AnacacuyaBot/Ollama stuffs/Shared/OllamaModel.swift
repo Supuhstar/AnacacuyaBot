@@ -34,7 +34,7 @@ extension OllamaModel: CustomStringConvertible {
 // MARK: - ModelCompatibility
 
 /// A known capability of a machine-learning model
-public enum ModelCapability: OllamaResponse, Equatable, Hashable {
+public enum ModelCapability: OllamaResponse, Hashable {
     
     /// The model can complete text
     case textCompletion

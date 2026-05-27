@@ -27,7 +27,7 @@
 /// each `Shape` case because it is orthogonal to structure — every variant
 /// can carry one, and adding future cross-cutting fields (`title`, `default`,
 /// `examples`) should cost one line here, not a diff across every case.
-public struct JsonSchema: Sendable {
+public struct JsonSchema: Sendable, Equatable {
     
     /// The structural variant of this schema. Determines which JSON Schema
     /// keywords appear on the wire.
@@ -51,7 +51,7 @@ public struct JsonSchema: Sendable {
     /// cannot determine a finite size for the type. The heap allocation is
     /// per-schema-node, which is negligible for the document sizes typical
     /// of this use case.
-    public indirect enum Shape: Sendable {
+    public indirect enum Shape: Sendable, Equatable {
         
         /// Use for free-form string values. Pass `enumeration` to constrain
         /// to a closed set — the JSON Schema equivalent of a `String` raw-value

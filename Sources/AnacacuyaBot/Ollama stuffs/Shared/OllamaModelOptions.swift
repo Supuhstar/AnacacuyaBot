@@ -56,9 +56,3 @@ public struct OllamaModelOptions: OllamaRequest {
         self.num_predict = num_predict
     }
 }
-
-
-
-// MARK: - Conformances
-
-extension OllamaModelOptions: Equatable {}

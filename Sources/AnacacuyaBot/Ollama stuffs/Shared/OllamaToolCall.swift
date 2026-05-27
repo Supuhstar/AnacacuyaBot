@@ -10,13 +10,27 @@ import Foundation
 
 
 public struct OllamaToolCall: OllamaTranceivable {
-    let function: Function
+    public let function: Function
+    
+    
+    public init(function: Function) {
+        self.function = function
+    }
 }
 
-extension OllamaToolCall {
+
+
+public extension OllamaToolCall {
     struct Function: OllamaTranceivable {
-        let name: String
-        var description: String?
-        var arguments: [String : JsonValue]?
+        public let name: String
+        public var description: String?
+        public var arguments: [String : JsonValue]?
+        
+        
+        public init(name: String, description: String? = nil, arguments: [String : JsonValue]? = nil) {
+            self.name = name
+            self.description = description
+            self.arguments = arguments
+        }
     }
 }

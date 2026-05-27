@@ -11,7 +11,7 @@ import RegexBuilder
 
 
 
-extension Substring {
+internal extension Substring {
     
     /// Sometimes, the bot will introduce itself (or a random user) at the start of its message. This removes it.
     ///
@@ -65,7 +65,7 @@ extension Substring {
                 ZeroOrMore(.whitespace)
             }
             Capture(as: keepRef) {
-                OneOrMore(.anyGraphemeCluster)
+                ZeroOrMore(.anyGraphemeCluster)
             }
             Anchor.endOfSubject
         }

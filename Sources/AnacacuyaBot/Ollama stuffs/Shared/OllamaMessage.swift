@@ -15,7 +15,7 @@ public struct OllamaMessage: OllamaTranceivable {
     var content: String
     private(set) var thinking: String?
     private(set) var toolName: String?
-    private(set) var toolCalls: [OllamaToolCall]?
+    var toolCalls: [OllamaToolCall]?
     private(set) var images: [Data]?
 }
 

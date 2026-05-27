@@ -107,6 +107,17 @@ struct SelfIntroductionTests {
     }
     
     
+    @Test func nothingButYou() async throws {
+        let example = """
+            you:
+            
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect("" == postprocessed)
+    }
+    
+    
     @Test func multiYou() async throws {
         let example = """
             you:
@@ -213,5 +224,50 @@ struct FakeChatLogRemovalTests {
         
         let postprocessed = await example.postprocessed()
         #expect("" == postprocessed)
+    }
+}
+
+
+
+// MARK: - Tool call in message content field
+
+struct ToolCallTests {
+    
+    @Test func justFunction() async throws {
+        let example = "tool\n</tool_call>\n{\"name\": \"get_temperature\", \"arguments\": {\"city\":\"Atlanta\"}}\n</tool_call>"
+        
+        let postprocessed = await example.postprocessed()
+        #expect(OllamaToolCall(function: .init(
+                name: "get_temperature",
+                description: nil,
+                arguments: [
+                    "city": .string("Atlanta")
+                ]
+            ))
+            == postprocessed
+        )
+    }
+    
+    
+    @Test func justJson() async throws {
+        let example = """
+            {
+              "name": "stablediffusion",
+              "arguments": {
+                "prompt": "A stylized and vibrant illustration of @KyNorthstar posing in a fantasy setting as a Gryphon."
+              }
+            }
+            """
+        
+        let postprocessed = await example.postprocessed()
+        #expect(OllamaToolCall(function: .init(
+                name: "stablediffusion",
+                description: nil,
+                arguments: [
+                    "prompt": .string("A stylized and vibrant illustration of @KyNorthstar posing in a fantasy setting as a Gryphon.")
+                ]
+            ))
+            == postprocessed
+        )
     }
 }

@@ -9,7 +9,7 @@ import Foundation
 
 
 
-extension Substring {
+internal extension Substring {
     
     /// Sometimes, the bot will include a filename tag at the start of its message. This removes it.
     ///

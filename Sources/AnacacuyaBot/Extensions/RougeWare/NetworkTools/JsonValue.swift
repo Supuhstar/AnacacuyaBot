@@ -8,7 +8,7 @@
 
 
 /// An arbitrary JSON value. Useful for when you expect a server to return something arbitrary but still valid JSON
-public indirect enum JsonValue: Codable, Sendable {
+public indirect enum JsonValue: Codable, Sendable, Equatable {
     case string(String)
     case int(Int)
     case double(Double)

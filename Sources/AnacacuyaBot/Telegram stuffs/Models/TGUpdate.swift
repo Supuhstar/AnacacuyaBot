@@ -15,7 +15,7 @@
 /// event kinds become relevant, add their fields here.
 ///
 /// Source: https://core.telegram.org/bots/api#update
-struct TGUpdate: Decodable, Sendable {
+public struct TGUpdate: Decodable, Sendable {
     
     /// Monotonically increasing identifier. The bot advances its server-side
     /// cursor by acknowledging updates up through this value, so any new

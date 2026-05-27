@@ -120,16 +120,21 @@ public extension ChatMessage {
     var contentForLlm: String {
         switch role {
         case .system:
-            textForLlm
+            textForLlm ?? ""
         
         case .tool:
             text
         
         case .assistant, .user:
-            """
-            \(sender.nameForLlm):
-            \(textForLlm)
-            """
+            if let textForLlm {
+                """
+                \(sender.nameForLlm):
+                \(textForLlm)
+                """
+            }
+            else {
+                ""
+            }
         }
     }
     
@@ -137,17 +142,22 @@ public extension ChatMessage {
     /// The message's text which we will show to the LLM.
     ///
     /// If this message includes images, then this returns image descriptions as well as user text.
-    var textForLlm: String {
-        if let imagesDescription {
-            """
-            \(imagesDescription)
-            \(text)
-            """
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+    var textForLlm: String? {
+        var firstPass: String {
+            if let imagesDescription {
+                """
+                \(imagesDescription)
+                \(text)
+                """
+            }
+            else {
+                text
+            }
         }
-        else {
-            text
-        }
+        
+        return firstPass
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmptyOrNil
     }
     
     

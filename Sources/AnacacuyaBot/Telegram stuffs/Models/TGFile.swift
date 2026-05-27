@@ -19,7 +19,7 @@
 /// must be re-issued.
 ///
 /// Source: https://core.telegram.org/bots/api#file
-struct TGFile: Decodable, Sendable {
+public struct TGFile: Decodable, Sendable {
     
     /// Identifier for this file, which can be used to download or reuse the file.
     let fileId: String

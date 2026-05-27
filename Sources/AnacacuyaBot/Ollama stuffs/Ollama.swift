@@ -159,14 +159,14 @@ internal extension Ollama {
 /// Appears in either direction of an Ollama exchange: both encoded into requests and decoded from responses.
 ///
 /// Used for payloads that are symmetric, like `OllamaMessage`, which travels into chat requests and back out as the assistant's reply.
-public typealias OllamaTranceivable = Codable & Sendable
+public typealias OllamaTranceivable = Codable & Sendable & Equatable
 
 /// Appears only in requests we send to Ollama.
 ///
 /// Used for payloads that are one-way sent to Ollama, like ``OllamaModelOptions``, which are sent but never received.
-public typealias OllamaRequest = Encodable & Sendable
+public typealias OllamaRequest = Encodable & Sendable & Equatable
 
 /// Appears only in responses we receive from Ollama.
 ///
 /// Used for payloads that are one-way received from Ollama, like ``OllamaChatresponse``, which are received but never sent.
-public typealias OllamaResponse = Decodable & Sendable
+public typealias OllamaResponse = Decodable & Sendable & Equatable

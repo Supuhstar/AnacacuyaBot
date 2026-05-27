@@ -17,7 +17,10 @@ extension Persona {
         pronouns: "they/them",
         fursona: "a gryphon",
         
-//        modelSettings: .init(num_predict: 500),
+        modelSettings: .init(
+            num_ctx: 128_000,
+//            num_predict: 500,
+        ),
         
         directResponseSystemPrompt: """
             Keep your reply to 1~3 sentences at MOST.
@@ -32,7 +35,8 @@ extension Persona {
             """,
         
         tools: [
-            .example
+            .imageGenerator
+//            .example
         ],
     )
 }

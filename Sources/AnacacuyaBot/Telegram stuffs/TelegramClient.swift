@@ -32,7 +32,7 @@ private let keyEncodingStrategy = JSONEncoder.KeyEncodingStrategy.convertToSnake
 /// architecture wouldn't earn its keep here. If the surface grows, the
 /// helpers are sized to be split out into endpoint files without rewriting
 /// the methods that use them.
-actor TelegramClient {
+public actor TelegramClient {
     
     /// Base URL for Bot API calls — every method composes its full URL by
     /// appending the method name. The token is baked in.
@@ -64,7 +64,7 @@ actor TelegramClient {
 
 // MARK: - API
 
-extension TelegramClient {
+public extension TelegramClient {
     
     /// Retrieves the Telegram user account that the bot is operating within.
     ///
@@ -130,6 +130,71 @@ extension TelegramClient {
                 parseMode: .markdown
             )
         )
+    }
+    
+    
+    /// Sends a photo to a chat.
+    ///
+    /// Two transport paths, picked by the `photo` case: a `.reference`
+    /// (file_id or URL) is an ordinary JSON request, while `.bytes` is a
+    /// `multipart/form-data` upload — the only encoding that carries raw
+    /// binary. The split mirrors how `downloadFile` stays separate from the
+    /// JSON helpers: most of the Telegram surface is JSON, and the byte
+    /// paths are deliberate exceptions rather than a reason to generalize.
+    ///
+    /// - Parameters:
+    ///   - chatId:           The destination chat.
+    ///   - caption:          _optional_ - caption, max 1024 characters (note: shorter than a message's 4096).
+    ///   - photo:            The image, as bytes to upload or a reference to reuse.
+    ///   - repliedToMessage: _optional_ - message ID to reply to.
+    func send(
+        photo: TGPhotoToSend,
+        caption: String? = nil,
+        inChat chatId: Int64,
+        replyingTo repliedToMessage: Int? = nil,
+    ) async throws {
+        switch photo {
+        case .reference(let reference):
+            struct SendPhotoByReference: Encodable {
+                let chatId: Int64
+                let photo: String
+                let caption: String?
+                let replyToMessageId: Int?
+                let parseMode: TGSendMessageParseMode?
+            }
+            
+            let _: TGMessage = try await post(
+                "sendPhoto",
+                SendPhotoByReference(
+                    chatId: chatId,
+                    photo: reference,
+                    caption: caption,
+                    replyToMessageId: repliedToMessage,
+                    parseMode: nil == caption ? nil : .markdown,
+                )
+            )
+            
+        case .bytes(let data, let filename):
+            var form = MultipartFormData()
+            form.addField(name: "chat_id", value: "\(chatId)")
+            if let caption {
+                form.addField(name: "caption", value: caption.telegram_escapedForMarkdownV2)
+                form.addField(name: "parse_mode", value: TGSendMessageParseMode.markdown.rawValue)
+            }
+            if let repliedToMessage {
+                form.addField(name: "reply_to_message_id", value: "\(repliedToMessage)")
+            }
+            form.addFile(name: "photo", filename: filename, contentType: "image/jpeg", data: data)
+            
+            let url = URL(string: "\(base)/sendPhoto")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+            request.httpBody = form.encoded()
+            
+            let (responseData, _) = try await URLSession.shared.data(for: request)
+            let _: TGMessage = try unwrap(responseData)
+        }
     }
     
     
@@ -210,6 +275,7 @@ extension TelegramClient {
         return try await downloadFile(file)
     }
 }
+
 
 
 
