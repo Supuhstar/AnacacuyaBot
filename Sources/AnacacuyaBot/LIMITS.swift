@@ -19,7 +19,7 @@ extension Limits {
     
     // MARK: Total interactions
     
-    static let maxTotalMessagesSentPerDay = 200
+    static let maxTotalMessagesSentPerDay = 1000
     
     
     // MARK: Autonomous interactions
