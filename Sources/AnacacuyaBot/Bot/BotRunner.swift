@@ -202,6 +202,7 @@ private extension BotRunner {
                 || receivedImages.isNotEmpty
         else {
             // Skip messages that carry neither user text nor a photo — service messages, edits we don't care about, etc.
+            log(info: "Skipping message with no text and no images.")
             return
         }
         
@@ -210,6 +211,9 @@ private extension BotRunner {
         {
             if !receivedImages.isEmpty {
                 log(error: "🖼️❌ Received \(receivedImages.count) image(s) but no text when there's no vision model specified. Set a vision model with the \(UnixEnvironmentKey.visionModelName.rawValue) environment variable to process images.")
+            }
+            else {
+                log(info: "Received image-only message with no vision model. Skipping...")
             }
             return
         }
@@ -393,6 +397,7 @@ private extension BotRunner {
         userExplicitlyRequestedResponse: Bool,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async {
+        logEntry(); defer { logExit() }
         // Uncomment when you're testing in production:
 //        try? await send(message: "😴💤 [I'm in maintenance mode]", inChat: state.chat.id, replyingTo: incomingMessage.id, chatState: &state); return
         
