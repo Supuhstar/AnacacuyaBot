@@ -458,7 +458,10 @@ private extension BotRunner {
         replyingTo repliedToMessage: TGMessage.ID?,
         chatState state: inout ChatState,
     ) async throws {
-        guard false == message.isEmpty else { return }
+        guard false == message.isEmpty else {
+            log(info: "🗣️🔇: [no response generated]")
+            return
+        }
         
         try await telegram.sendMessage(
             chatId: chatId,
