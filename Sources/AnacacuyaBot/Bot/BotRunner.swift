@@ -621,12 +621,16 @@ private extension BotRunner {
         do {
             async let deduplicated = context.deduplicated()
             
-            reply = try await ollama
+            let rawReply = try await ollama
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
                     settings: settings
                 )
+            
+            log(info: "🥩🤖 raw reply: \(rawReply)")
+            
+            reply = await rawReply
                 .postprocessed()
         }
         catch {
@@ -671,7 +675,7 @@ private extension BotRunner {
             guard let randomChat = await store.allChats().randomElement() else { continue }
             
             var state = await store.state(for: randomChat)
-            guard await state.stillAllowedToInterjectToday() else { continue }
+            guard await state.shouldInterjectNow else { continue }
             
             await interject(inReplyTo: nil, state: &state)
         }
