@@ -1,0 +1,63 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../AnacacuyaBetaBot"
+		}
+	],
+	"settings": {
+		"workbench.colorCustomizations": {
+			"activityBar.background": "#3D2A12",
+			"titleBar.activeBackground": "#553A1A",
+			"titleBar.activeForeground": "#FCF9F6",
+			"titleBar.inactiveBackground": "#3D2A12",
+			"titleBar.inactiveForeground": "#FCF9F6"
+		}
+	},
+	"launch": {
+		"configurations": [
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:AnacacuyaBot}",
+				"name": "Debug AnacacuyaBot (AnacacuyaBot)",
+				"target": "AnacacuyaBot",
+				"configuration": "debug",
+				"preLaunchTask": "swift: Build Debug AnacacuyaBot (AnacacuyaBot)"
+			},
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:AnacacuyaBot}",
+				"name": "Release AnacacuyaBot (AnacacuyaBot)",
+				"target": "AnacacuyaBot",
+				"configuration": "release",
+				"preLaunchTask": "swift: Build Release AnacacuyaBot (AnacacuyaBot)"
+			},
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:AnacacuyaBetaBot}",
+				"name": "Debug AnacacuyaBot (AnacacuyaBetaBot)",
+				"target": "AnacacuyaBot",
+				"configuration": "debug",
+				"preLaunchTask": "swift: Build Debug AnacacuyaBot (AnacacuyaBetaBot)"
+			},
+			{
+				"type": "swift",
+				"request": "launch",
+				"args": [],
+				"cwd": "${workspaceFolder:AnacacuyaBetaBot}",
+				"name": "Release AnacacuyaBot (AnacacuyaBetaBot)",
+				"target": "AnacacuyaBot",
+				"configuration": "release",
+				"preLaunchTask": "swift: Build Release AnacacuyaBot (AnacacuyaBetaBot)"
+			}
+		]
+	}
+}
