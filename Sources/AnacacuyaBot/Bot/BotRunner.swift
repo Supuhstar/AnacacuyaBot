@@ -202,6 +202,7 @@ private extension BotRunner {
                 || receivedImages.isNotEmpty
         else {
             // Skip messages that carry neither user text nor a photo — service messages, edits we don't care about, etc.
+            log(info: "Skipping message with no text and no images.")
             return
         }
         
@@ -210,6 +211,9 @@ private extension BotRunner {
         {
             if !receivedImages.isEmpty {
                 log(error: "🖼️❌ Received \(receivedImages.count) image(s) but no text when there's no vision model specified. Set a vision model with the \(UnixEnvironmentKey.visionModelName.rawValue) environment variable to process images.")
+            }
+            else {
+                log(info: "Received image-only message with no vision model. Skipping...")
             }
             return
         }
@@ -393,6 +397,7 @@ private extension BotRunner {
         userExplicitlyRequestedResponse: Bool,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
     ) async {
+        logEntry(); defer { logExit() }
         // Uncomment when you're testing in production:
 //        try? await send(message: "😴💤 [I'm in maintenance mode]", inChat: state.chat.id, replyingTo: incomingMessage.id, chatState: &state); return
         
@@ -453,7 +458,10 @@ private extension BotRunner {
         replyingTo repliedToMessage: TGMessage.ID?,
         chatState state: inout ChatState,
     ) async throws {
-        guard false == message.isEmpty else { return }
+        guard false == message.isEmpty else {
+            log(info: "🗣️🔇: [no response generated]")
+            return
+        }
         
         try await telegram.sendMessage(
             chatId: chatId,
@@ -613,12 +621,16 @@ private extension BotRunner {
         do {
             async let deduplicated = context.deduplicated()
             
-            reply = try await ollama
+            let rawReply = try await ollama
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
                     settings: settings
                 )
+            
+            log(info: "🥩🤖 raw reply: \(rawReply)")
+            
+            reply = await rawReply
                 .postprocessed()
         }
         catch {
@@ -663,7 +675,7 @@ private extension BotRunner {
             guard let randomChat = await store.allChats().randomElement() else { continue }
             
             var state = await store.state(for: randomChat)
-            guard await state.stillAllowedToInterjectToday() else { continue }
+            guard await state.shouldInterjectNow else { continue }
             
             await interject(inReplyTo: nil, state: &state)
         }

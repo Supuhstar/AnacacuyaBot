@@ -51,14 +51,13 @@ extension Substring {
     }
     
     
-    private func selfIntroductionRegex(botUsername: String, keepRef: Reference<Substring>) -> some RegexComponent {
+    private func selfIntroductionRegex(botUsername _: String, keepRef: Reference<Substring>) -> some RegexComponent {
         Regex {
             Anchor.startOfSubject
             Optionally {
                 ChoiceOf {
                     startsWithYou
-                    usernameIntroductionRegex(botUsername)
-                    userIntroductionRegex(botUsername)
+                    userIntroductionRegex()
                 }
                 
                 ZeroOrMore(.whitespace)
@@ -79,17 +78,10 @@ extension Substring {
     }
     
     
-    private func usernameIntroductionRegex(_ username: String) -> some RegexComponent {
-        Regex {
-            "@"; username; ":"
-        }
-    }
-    
-    
-    private func userIntroductionRegex(_ username: String) -> some RegexComponent {
+    private func userIntroductionRegex() -> some RegexComponent {
         Regex {
             Optionally { OneOrMore(.anyNonNewline); " " }
-            "(@"; username; "):"
+            "(@"; OneOrMore(.word); "):"
         }
     }
 }
