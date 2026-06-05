@@ -45,7 +45,7 @@ public extension Ollama {
         else {
             log(info: "Model `\(modelName)` not found. Pulling...")
             if pullIfMissing {
-                _ = try await pullModel(named: modelName, timeout: .minutes(10))
+                _ = try await pullModel(named: modelName, timeout: .minutes(20))
                 log(info: "Pulled")
                 return try await model(named: modelName, pullIfMissing: false)
             }
