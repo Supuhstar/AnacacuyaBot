@@ -63,7 +63,7 @@ extension BotCommand {
     static var help: String? { nil }
     
     /// All the names that this command could use: its canonical name and all synonyms
-    static var allNames: [String] { [name] + alternativeNames }
+    static var allNames: [String] { ([name] + alternativeNames).map { $0.lowercased() } }
     
     
     /// Returns `true` iff the given whole user text is a valid representation of this command to this bot
@@ -85,7 +85,7 @@ extension BotCommand {
     /// - Returns: The parsed command, iff parsing was successful
     static func parsing(_ wholeUserText: String, as botUser: TGUser) -> ParsedBotCommand? {
         guard let parsed = ParsedBotCommand(wholeUserText),
-              allNames.contains(parsed.name)
+              allNames.contains(parsed.name.lowercased())
         else {
             return nil
         }

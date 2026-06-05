@@ -10,3 +10,5 @@ DerivedData/
 *.gz
 *.zip
 *.7z
+
+.vscode/

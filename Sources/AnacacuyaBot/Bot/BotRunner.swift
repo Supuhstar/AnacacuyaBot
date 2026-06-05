@@ -110,6 +110,7 @@ extension BotRunner {
             store: ChatStateStore(),
             persona: .default,
             commands: [
+                NoopCommand(),
                 PromptCommand(),
                 DebugShowFullContextCommand(),
             ],
