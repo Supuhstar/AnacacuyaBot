@@ -36,6 +36,7 @@ public extension Substring {
             .removingWholeMessageQuotes()
             .removingFilenameTag()
             .removingSelfIntroduction()
+            .removingMentions()
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

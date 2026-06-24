@@ -17,7 +17,7 @@ extension Persona {
         pronouns: "they/them",
         fursona: "a gryphon",
         
-        modelSettings: .init(num_predict: 500),
+        modelSettings: .init(num_predict: 100),
         
         directResponseSystemPrompt: """
             Keep your reply to 1~3 sentences at MOST.
@@ -25,9 +25,9 @@ extension Persona {
             Say whatever you want!
             """,
         
+//        You're a member of a casual group chat. No one is talking to you right now.
+//        // You NEVER summarize what has been said.
         interjectionSystemPrompt: """
-            You're a member of a casual group chat. No one is talking to you right now.
-            // You NEVER summarize what has been said.
             Say whatever you want!
             """
     )
