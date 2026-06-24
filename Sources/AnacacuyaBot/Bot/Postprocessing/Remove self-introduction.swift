@@ -14,21 +14,6 @@ import RegexBuilder
 extension Substring {
     
     /// Sometimes, the bot will introduce itself (or a random user) at the start of its message. This removes it.
-    ///
-    /// Here's a real example:
-    /// > "@AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts."
-    ///
-    /// - Returns: The message without the initial introduction, if'n it has one
-    @MainActor
-    func removingSelfIntroduction() -> Substring {
-        guard let botUsername = TGUser.botUser.username else {
-            fatalError("Bot shouldn't be able to run without a username")
-        }
-        return removingSelfIntroduction(botUsername: botUsername)
-    }
-    
-    
-    /// Sometimes, the bot will introduce itself (or a random user) at the start of its message. This removes it.
     /// 
     /// Here's a real example:
     /// > @AnacacuyaBot: Interesting! Can you list the top ten reasons? I'm curious to hear your thoughts.
@@ -39,25 +24,23 @@ extension Substring {
     ///
     /// This function addresses both of those
     ///
-    /// - Parameter botUsername: The username of the bot (without an @)
-    ///
     /// - Returns: The message without the initial introduction, if'n it has one
-    func removingSelfIntroduction(botUsername: String) -> Substring {
+    func removingSelfIntroduction() -> Substring {
+        guard isNotEmpty else { return self }
         let keepRef = Reference(Substring.self)
-        
-        let regex = selfIntroductionRegex(botUsername: botUsername, keepRef: keepRef)
-        
+        let regex = selfIntroductionRegex(keepRef: keepRef)
         return self.firstMatch(of: regex).map { $0[keepRef] } ?? self
     }
     
     
-    private func selfIntroductionRegex(botUsername _: String, keepRef: Reference<Substring>) -> some RegexComponent {
+    // /^(?:startsWithYou|userIntroductionRegex)?\s*(?<keepRef>.+)$/
+    private func selfIntroductionRegex(keepRef: Reference<Substring>) -> some RegexComponent {
         Regex {
             Anchor.startOfSubject
             Optionally {
                 ChoiceOf {
                     startsWithYou
-                    userIntroductionRegex()
+                    userIntroductionRegex
                 }
                 
                 ZeroOrMore(.whitespace)
@@ -70,18 +53,17 @@ extension Substring {
     }
     
     
+    // /(?:you:\n)+/
     private var startsWithYou: some RegexComponent {
-        OneOrMore {
-            "you:"
-            One(.newlineSequence)
-        }
+        /(?:you:\n)+/
     }
     
     
-    private func userIntroductionRegex() -> some RegexComponent {
+    // /([^\n]+ )?(?:\(@\w+?\):|@\w+?:)/
+    private var userIntroductionRegex: some RegexComponent {
         Regex {
             Optionally { OneOrMore(.anyNonNewline); " " }
-            "(@"; OneOrMore(.word); "):"
+            /(?:\(@\w+?\)|@\w+?:)/
         }
     }
 }

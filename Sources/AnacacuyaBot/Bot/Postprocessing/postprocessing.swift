@@ -31,12 +31,13 @@ public extension Substring {
     @MainActor
     func postprocessed() -> String {
         self
-            .removingSelfIntroduction()
             .removingFakeChatLogs()
+            .removingSelfIntroduction()
             .removingWholeMessageQuotes()
             .removingFilenameTag()
             .removingSelfIntroduction()
             .removingMentions()
+            .removingNoResponseGenerated()
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
@@ -53,6 +54,7 @@ internal extension Substring {
     ///
     /// - Returns: The substring captured by `keptCapture`
     func isolate<R: RegexComponent>(by regex: R, keeping keptCapture: KeyPath<R.RegexOutput, Substring>) -> Substring {
+        guard isNotEmpty else { return self }
         if let match = self.firstMatch(of: regex) {
             return match.output[keyPath: keptCapture]
         }

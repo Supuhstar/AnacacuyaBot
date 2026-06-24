@@ -17,7 +17,7 @@ extension Persona {
         pronouns: "they/them",
         fursona: "a gryphon",
         
-        modelSettings: .init(num_predict: 100),
+        modelSettings: .init(num_predict: 80),
         
         directResponseSystemPrompt: """
             Keep your reply to 1~3 sentences at MOST.

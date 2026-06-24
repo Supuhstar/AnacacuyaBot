@@ -460,7 +460,7 @@ private extension BotRunner {
         chatState state: inout ChatState,
     ) async throws {
         guard false == message.isEmpty else {
-            log(info: "🗣️🔇: [no response generated]")
+            log(info: "🗣️🔇: \(noResponseGeneratedString)")
             return
         }
         

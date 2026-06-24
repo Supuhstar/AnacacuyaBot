@@ -112,9 +112,7 @@ extension TelegramClient {
     ///   - inReplyTo: Identifier of the message being replied to. Nil for a
     ///                fresh top-level send.
     func sendMessage(chatId: Int64, text: String, inReplyTo: Int? = nil) async throws {
-        guard text.isNotEmpty
-              || (text.matches(noResponseRegex))
-        else {
+        guard text.isNotEmpty else {
             log(info: "🙊 (chose to say nothing)")
             return
         }
@@ -343,47 +341,6 @@ enum TelegramHttpError: LocalizedError {
             
         case .downloadFailed(let fileId, let reason):
             return "Couldn't download Telegram file \(fileId): \(reason)"
-        }
-    }
-}
-
-
-
-//unsafe: Unsure if there's a better way to do this. Pretty sure `Regex` is safe to be nonisolated anyway.
-@safe
-nonisolated(unsafe)
-private let noResponseRegex = Regex {
-        Anchor.startOfSubject
-        ChoiceOf {
-            bracketed("[", noResponseGeneratedString, "]")
-            bracketed("{", noResponseGeneratedString, "}")
-            bracketed("(", noResponseGeneratedString, ")")
-        }
-        ZeroOrMore(.whitespace)
-        Optionally {
-            "."
-        }
-        ZeroOrMore(.whitespace)
-        Anchor.endOfSubject
-    }
-    .ignoresCase()
-
-
-
-private func bracketed(_ opening: Character, _ body: String, _ closing: Character) -> Regex<(Substring, Substring)> {
-    Regex {
-        Capture {
-            ChoiceOf {
-                opening
-                "\\\(opening)"
-            }
-            ZeroOrMore(.whitespace)
-            body
-            ZeroOrMore(.whitespace)
-            ChoiceOf {
-                closing
-                "\\\(closing)"
-            }
         }
     }
 }

@@ -102,7 +102,7 @@ struct SelfIntroductionTests {
         
         let postprocessed = await example.postprocessed()
         #expect("""
-            *raises eyebrows and chortles quietly to himself* Ah, @dogval. Your responses never fail to bring a smile to my face. 😄
+            *raises eyebrows and chortles quietly to himself* Ah, dogval. Your responses never fail to bring a smile to my face. 😄
             """
             == postprocessed)
     }
@@ -153,7 +153,7 @@ struct FakeChatLogRemovalTests {
         
         let postprocessed = await example.postprocessed()
         #expect("""
-            Sorry about that, @ninedd.
+            Sorry about that, ninedd.
             
             We were discussing running openclaw on my macbook pro, and it seems like you joined in right as we were starting our chat!
             """
@@ -199,5 +199,40 @@ struct FakeChatLogRemovalTests {
         
         let postprocessed = await example.postprocessed()
         #expect("" == postprocessed)
+    }
+}
+
+
+
+// MARK: - No response generated
+
+struct NoResponseGeneratedTests {
+    
+    init() async {
+        await setUpBot()
+    }
+    
+    
+    @Test func pure() async throws {
+        let example = "[no response generated]"
+        
+        let postprocessed = await example.postprocessed()
+        #expect(.empty == postprocessed)
+    }
+    
+    
+    @Test func curly() async throws {
+        let example = "{no response generated}"
+        
+        let postprocessed = await example.postprocessed()
+        #expect(.empty == postprocessed)
+    }
+    
+    
+    @Test func parens() async throws {
+        let example = "(no response generated)"
+        
+        let postprocessed = await example.postprocessed()
+        #expect(.empty == postprocessed)
     }
 }

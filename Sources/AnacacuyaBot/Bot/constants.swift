@@ -9,4 +9,5 @@ import Foundation
 
 
 
-package let noResponseGeneratedString = "[no response generated]"
+package let noResponseGeneratedString_unbracketed = "no response generated"
+package let noResponseGeneratedString = "[\(noResponseGeneratedString_unbracketed)]"
