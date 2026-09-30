@@ -44,8 +44,7 @@ public struct ModelName: Sendable {
 // MARK: - parsing
 
 //unsafe: I'm pretty dang sure there's nothing unsafe about this regex
-private nonisolated(unsafe) let regex = /^(?:(?<namespace>[^\/:]+?)\/)?(?<name>[^\/:]+?)(?::(?<tag>[^\/:]+))?$/
-
+private nonisolated(unsafe) let regex = /^(?:(?<namespace>.+)\/)?(?<name>[^\/:]+?)(?::(?<tag>[^\/:]+))?$/
 
 
 extension ModelName: LosslessStringConvertible {
