@@ -1,74 +1,35 @@
 //
-//  Persona.swift
+//  ContextComposer.swift
 //  AnacacuyaBot
 //
 //  Made by Ky directing Claude 4.7 Opus 2026-05-07
+//  Rewritten by Ky directing Claude 5.5 Sonnet 2026-10-01
 //
 
 import Foundation
 
 
 
-extension Persona {
-    
-    /// Luna Nightshade is the persona that the bot came up with on first-run.
-    static let lunaNightshade = Persona(
-        name: "Luna Nightshade",
-        pronouns: "they/them",
-        fursona: "a gryphon",
-        
-        modelSettings: .init(num_predict: 80),
-        
-        directResponseSystemPrompt: """
-            Keep your reply to 1~3 sentences at MOST.
-            These people are your friends, and you genuinely treat them that way.
-            Say whatever you want!
-            """,
-        
-//        You're a member of a casual group chat. No one is talking to you right now.
-//        // You NEVER summarize what has been said.
-        interjectionSystemPrompt: """
-            Say whatever you want!
-            """
-    )
-}
-
-
-
-/// Encodes the bot's voice and the rules for translating chat history
-/// into prompts the model acts on.
+/// Translates chat history and the current situation into the messages the model acts on.
+///
+/// The bot's voice (name, tone, sampling settings) isn't composed here. It lives in the
+/// Ollama model's modelfile, so changing the personality never touches Swift: see the
+/// `Personas` folder. What's left here is everything a modelfile can't know, like who the bot is
+/// talking to and what time it is, plus the output rules which the bot's own code depends on.
+///
+/// The history comes first and the system messages after it. Ollama only applies a model's own
+/// `SYSTEM` prompt when the first message of a request isn't a system message, so a system
+/// message leading the request would silently replace the modelfile's persona.
 ///
 /// Lives separately from `BotRunner` because "when to speak" and "what
-/// to say" evolve on different timescales — the scheduling logic is
+/// to say" evolve on different timescales: the scheduling logic is
 /// stable, the prompt engineering is iterative. Keeping them apart means
 /// rewriting a prompt doesn't touch the runner, and tuning the runner
-/// doesn't disturb the voice.
+/// doesn't disturb the prompts.
 ///
-/// Two prompt shapes are exposed because the trigger paths have
-/// genuinely different intent. A direct response is the bot answering
-/// someone — natural fit for a multi-turn replay. An interjection is the
-/// bot offering unsolicited commentary on a conversation it's observing
-/// — better expressed as a flat transcript with explicit framing,
-/// because replaying as turns invites the model to continue the last
-/// speaker rather than comment.
-struct Persona: Sendable {
-    
-    var name: String? = nil
-    var pronouns: String? = nil
-    var fursona: String? = nil
-    
-    /// The low-level settings for the model that'll be running the persona
-    var modelSettings: OllamaModelOptions? = nil
-    
-    /// System prompt for direct responses. Sets the voice for replies
-    /// that participate in turn-taking dialogue.
-    let directResponseSystemPrompt: String
-
-    /// System prompt for unprompted interjections. Stricter framing
-    /// because the model must understand it's commenting on a
-    /// conversation rather than continuing one.
-    let interjectionSystemPrompt: String
-    
+/// A direct response and an interjection differ only in how the situation is framed (who the
+/// bot is answering, and who the reply is addressed to), because the persona is the same in both.
+enum ContextComposer {
     
     /// Composes the messages that you can send to Ollama to give the model all the context it needs for a response.
     /// 
@@ -81,23 +42,22 @@ struct Persona: Sendable {
     ///   - capabilities:     The capabilities to tell the model it has
     ///
     /// - Returns: The messages that you can send to Ollama to give the model all the context it needs for a response to those messages. This includes the given historical messages, as well as system prompts as needed.
-    func contextMessages(
+    static func contextMessages(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         history: [ChatMessage],
         capabilities: Set<ModelCapability>,
     ) async -> [ChatMessage] {
-        let (earlier, later, tail) = await systemPrompt(
+        let (general, tail) = await systemPrompt(
             for: purpose,
             in: chat,
             inReplyTo: repliedToMessage,
             capabilities: capabilities,
         )
-        return [earlier]
-            + history
+        return history
             + [
-                later,
+                general,
                 tail,
             ]
     }
@@ -114,15 +74,15 @@ enum BotMessagePurpose: String {
 
 // MARK: - Prompt building
 
-extension Persona {
+extension ContextComposer {
     
-    func systemPrompt(
+    static func systemPrompt(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         capabilities: Set<ModelCapability>,
     ) async -> PiecewiseSystemPrompt<ChatMessage> {
-        let (earlier, later, tail) = await systemPromptStrings(
+        let (general, tail) = await systemPromptStrings(
             for: purpose,
             in: chat,
             inReplyTo: repliedToMessage,
@@ -132,14 +92,13 @@ extension Persona {
         let isReply = nil != repliedToMessage
         
         return (
-            earlier: .system(isReply: isReply, text: earlier),
-            later: .system(isReply: isReply, text: later),
+            general: .system(isReply: isReply, text: general),
             tail: .system(isReply: isReply, text: tail),
         )
     }
     
     
-    func systemPromptStrings(
+    static func systemPromptStrings(
         for purpose: BotMessagePurpose,
         in chat: TGChat,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
@@ -187,15 +146,6 @@ extension Persona {
             Send a short message to the \(targetAudience).
             """
         
-        let specificPrompt = switch purpose {
-            case .interjection:
-                interjectionSystemPrompt
-                
-            case .response:
-                directResponseSystemPrompt
-            }
-        
-        
         let creatorNameContext: String? =
             if let creator = UnixEnvironment[.creatorUsername] {
                 """
@@ -222,42 +172,23 @@ extension Persona {
         
         
         return (
-            earlier: generalPrompt,
-            later: specificPrompt,
+            general: generalPrompt,
             tail: tailSystemPromptText,
         )
     }
     
     
-    typealias PiecewiseSystemPrompt<Piece> = (earlier: Piece, later: Piece, tail: Piece)
+    typealias PiecewiseSystemPrompt<Piece> = (general: Piece, tail: Piece)
 }
 
 
 
-private extension Persona {
+private extension ContextComposer {
     
     @MainActor
-    func inEverySystemPrompt(capabilities: Set<ModelCapability>) -> String {
-        var preface = ""
-        
-        if let name {
-            if let pronouns {
-                preface += "Your name is \(name) (\(pronouns)). "
-            }
-            else {
-                preface += "Your name is \(name). "
-            }
-        }
-        else if let pronouns = pronouns {
-            preface += "Your pronouns are \(pronouns). "
-        }
-        
-        if let fursona {
-            preface += "Your fursona is \(fursona). "
-        }
-        
+    static func inEverySystemPrompt(capabilities: Set<ModelCapability>) -> String {
         return """
-            \(preface)Your username is @\(TGUser.botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
+            Your username is @\(TGUser.botUser.username ?? "❌ WTF bots are required to have usernames. IMPORTANT: Your next message MUST say that something went wrong with the system prompt builder.").
             Whatever you say next will be the ENTIRE body of a message. Reply with ONLY YOUR message text. Remember who you are.
             You're allowed to use MarkdownV2.
             \(capabilities.map(\.descriptionForLlmSystemPrompt).joined(separator: "\n"))

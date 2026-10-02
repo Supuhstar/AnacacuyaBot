@@ -48,7 +48,7 @@ General limits are defined in `Sources/AnacacuyaBot/LIMITS.swift`. Tweak those i
 
 ### Persona
 
-The bot adopts a persona when it's using its LLM to generate messages. You can change which one it uses by default in the `Sources/AnacacuyaBot/DEFAULT Persona.swift` file.
+The bot adopts a persona when it's using its LLM to generate messages. You can change which one it uses by following the instructions in the `Personas` folder.
 
 
 

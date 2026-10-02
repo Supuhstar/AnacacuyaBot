@@ -26,7 +26,8 @@ public extension Ollama {
     /// - Returns: The server's status response indicating completion.
     func pullModel(named modelName: ModelName, timeout: Duration) async throws -> OllamaStatusOnlyResponse {
         try await post(to: "pull",
-            OllamaPullModelRequest(model: modelName)
+            OllamaPullModelRequest(model: modelName),
+            timeout: timeout,
         )
     }
 }
