@@ -33,7 +33,6 @@ struct BotRunner: Sendable {
     let ollama: Ollama
     let models: (llm: OllamaModel, vision: OllamaModel?)
     let store: ChatStateStore
-    let persona: Persona
     let commands: [any BotCommand]
     let limiter: BotLimiter
     
@@ -108,7 +107,6 @@ extension BotRunner {
             ollama: ollama,
             models: (llm: llmModel, vision: visionModel),
             store: ChatStateStore(),
-            persona: .default,
             commands: [
                 NoopCommand(),
                 PromptCommand(),
@@ -358,7 +356,6 @@ private extension BotRunner {
             let arguments = parsedCommand.body.arguments
             
             let commandContext = CommandContext(
-                    persona: persona,
                     commandMessage: incomingMessage,
                     fullContextMessageHistory: { [state] purpose in
                         await contextMessages(
@@ -366,7 +363,6 @@ private extension BotRunner {
                             state: state,
                             inReplyTo: incomingMessage.replyToMessage
                         )
-                        .context
                     },
                     capabilities: capabilities,
                 )
@@ -553,17 +549,15 @@ internal extension BotRunner {
         for purpose: BotMessagePurpose,
         state: ChatState,
         inReplyTo repliedToMessage: TGRepliedToMessage?,
-    ) async -> (context: [ChatMessage], settings: OllamaModelOptions?) {
+    ) async -> [ChatMessage] {
         let history = await state.recentMessages
-        let context = await persona.contextMessages(
+        return await ContextComposer.contextMessages(
             for: purpose,
             in: state.chat,
             inReplyTo: repliedToMessage,
             history: history,
             capabilities: capabilities,
         )
-        let settings = persona.modelSettings
-        return (context: context, settings: settings)
     }
 }
 
@@ -578,24 +572,23 @@ private extension BotRunner {
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         state: inout ChatState,
     ) async {
-        let (context, settings) = await contextMessages(for: .response, state: state, inReplyTo: repliedToMessage)
-        await sendGeneratedResponse(context: context, settings: settings, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
+        let context = await contextMessages(for: .response, state: state, inReplyTo: repliedToMessage)
+        await sendGeneratedResponse(context: context, chatId: state.chat.id, state: &state, inReplyTo: repliedToMessage?.messageId)
     }
     
     
     /// Generates and sends an unprompted interjection. Distinguished
-    /// from `respond` only by which prompt shape it asks the persona
+    /// from `respond` only by which prompt shape it asks the context composer
     /// for — the send-and-record machinery is shared via `generate`.
     private func interject(
         inReplyTo repliedToMessage: TGRepliedToMessage?,
         state: inout ChatState,
     ) async {
-        let (context, settings) = await contextMessages(for: .interjection, state: state, inReplyTo: repliedToMessage)
+        let context = await contextMessages(for: .interjection, state: state, inReplyTo: repliedToMessage)
         
         
         await sendGeneratedResponse(
             context: context,
-            settings: settings,
             chatId: state.chat.id,
             state: &state,
             inReplyTo: nil)
@@ -612,7 +605,6 @@ private extension BotRunner {
     /// for why.
     private func sendGeneratedResponse(
         context: [ChatMessage],
-        settings: OllamaModelOptions?,
         chatId: Int64,
         state: inout ChatState,
         inReplyTo: Int?,
@@ -626,7 +618,7 @@ private extension BotRunner {
                 .chat(
                     with: models.llm,
                     context: await deduplicated,
-                    settings: settings
+                    settings: nil
                 )
             
             log(info: "🥩🤖 raw reply: \(rawReply)")

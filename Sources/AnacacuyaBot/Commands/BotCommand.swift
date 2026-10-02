@@ -191,9 +191,6 @@ public struct BotCommandArgument: Equatable, Hashable {
 /// Meta-info for a bot to best understand what to do when given a command
 public struct CommandContext: Sendable {
     
-    /// The bot's persona which was loaded when this command was run.
-    let persona: Persona
-    
     /// The full original message the user sent when running this command, as fetched from the Telegram API
     let commandMessage: TGMessage
     

@@ -26,7 +26,7 @@ struct PromptCommand: BotCommand {
     func run(arguments _: [BotCommandArgument], remainingText _: String?, context: CommandContext) async throws(CommandRunError) -> [CommandResponse] {
         
         func systemPrompt(for purpose: BotMessagePurpose, in chatType: TGChatType) async -> String {
-            let (earlier, later, tail) = await context.persona
+            let (general, tail) = await ContextComposer
                 .systemPromptStrings(
                     for: purpose,
                     in: .anyChat(type: chatType),
@@ -35,11 +35,9 @@ struct PromptCommand: BotCommand {
                 )
             
             return """
-                \(earlier)
-                
                 ---<`Context messages would go here`>---
                 
-                \(later)
+                \(general)
                 
                 \(tail)
                 """
